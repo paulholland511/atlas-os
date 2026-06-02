@@ -45,8 +45,25 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the README and the docs index.
 
 ### Changed
-- README: documented `atlas trading`, the new `atlas email` flags, env-validation
-  behaviour, a Docker section, and the Docker files in the repo-layout diagram.
+- **README**: documented `atlas trading`, the new `atlas email` flags,
+  env-validation behaviour, a Docker section (+ a Docker pointer under
+  Installation), and the Docker files in the repo-layout diagram.
+- **Docs sync across the set** to match the streamlined CLI:
+  - `docs/ARCHITECTURE.md` — added the `atlas` CLI as component 0 (the unified
+    entry point) and a Deployment section covering checkout / installed tool /
+    Docker.
+  - `docs/EXAMPLES.md`, `docs/features/email-reports.md` — updated every
+    `atlas email` example to the new flags (with `--json` for raw payloads),
+    fixing samples that the flag change would otherwise have broken.
+  - `docs/QUICKSTART.md` — corrected the minimum Python to 3.11+ and linked the
+    Docker quick-start.
+  - `docs/README.md` (docs index) — linked the SETUP core-vs-optional matrix and
+    the Docker files.
+  - `SECURITY.md` — added a "Running in containers (Docker)" section (no secrets
+    or vault data in the image; runtime-only `--env-file`; bind-mounted vault).
+- **`pyproject.toml`** continues to declare the `atlas` entry point and the
+  optional dependency groups (`[pdf]`, `[trading]`, `[all]`); these are now the
+  documented install path (`pip install -e ".[all]"`) for the optional features.
 
 ## [0.3.0] — 2026-06-02
 

@@ -10,7 +10,7 @@ the core. For the full walkthrough see [`SETUP.md`](SETUP.md).
 
 You need three things installed:
 
-- **Python 3.10+** — check with `python3 --version`
+- **Python 3.11+** — check with `python3 --version`
 - **Git** — check with `git --version`
 - A **markdown vault** — any folder of `.md` files. [Obsidian](https://obsidian.md/)
   is the natural home but isn't required; an empty folder works (Atlas OS will
@@ -115,3 +115,5 @@ Atlas OS — doctor
 - **Send email reports** — finish the [Gmail setup](EXAMPLES.md#smtp-setup-gmail-app-password).
 - **Automate more** — browse the [skills catalog](SCHEDULED-TASKS.md).
 - **Tune everything** — every env var is documented in [`CONFIGURATION.md`](CONFIGURATION.md).
+- **Prefer containers?** Skip the venv entirely and run the CLI in Docker —
+  see the [Docker section in SETUP.md](SETUP.md#run-in-docker-optional).

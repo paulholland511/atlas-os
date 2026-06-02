@@ -3,8 +3,9 @@
 Atlas OS is a thin, local-first layer that turns Claude Cowork into a personal
 operating system over a markdown knowledge vault. It is deliberately
 file-based: the "database" is a folder of `.md` files, the "API" is a set of
-small Python scripts, and the "scheduler" is a set of skill prompts run on a
-cron-like schedule.
+small Python scripts fronted by the unified **`atlas` CLI** (`atlas_os/`), and
+the "scheduler" is a set of skill prompts run on a cron-like schedule. Both you
+and the scheduled skills drive everything through the one `atlas` command.
 
 ```
                         ┌──────────────────────────────┐
@@ -30,6 +31,16 @@ cron-like schedule.
 ```
 
 ## Components
+
+### 0. The `atlas` CLI (`atlas_os/`)
+The single entry point. A [Typer](https://typer.tiangolo.com/) app that
+auto-loads `.env`, validates each command's required env vars up front, and
+wraps the pipeline scripts (`atlas embed`, `graph`, `commit`, `changelog`,
+`health`, `email`, `trading`, `schemas`) plus CLI-only commands (`init`,
+`doctor`, `skills`). Installed via `pip install -e .` (or `uv tool install` /
+`pipx`); `pyproject.toml` declares the `atlas` entry point and the optional
+dependency groups (`[pdf]`, `[trading]`, `[all]`). The same scripts remain
+runnable directly, so the CLI is a convenience layer, not a hard dependency.
 
 ### 1. Knowledge vault
 A plain folder of markdown notes (works great with Obsidian, but not required).
@@ -73,3 +84,14 @@ A static HTML overview that reads from your own local backend endpoints.
 - **Files over databases.** Everything is inspectable, diffable, and portable.
 - **Idempotent automations.** Re-running a task converges rather than duplicates.
 - **Non-destructive.** Scripts add/append; the hot cache is append-only.
+
+## Deployment
+
+Atlas OS runs three ways, all from the same source: a **source checkout**
+(`pip install -e .`), an **installed tool** (`uv tool install` / `pipx`, which
+bundles the scripts/schemas/templates into the wheel — see
+[`atlas_os/_paths.py`](../atlas_os/_paths.py)), or a **container**. The root
+[`Dockerfile`](../Dockerfile) (Python 3.11-slim + git) packages the CLI and
+[`docker-compose.yml`](../docker-compose.yml) bind-mounts your vault and loads
+`.env` at runtime — no secrets or vault data are baked into the image. There is
+no long-running service: it's a CLI, so containers run one subcommand and exit.

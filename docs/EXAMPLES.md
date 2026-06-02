@@ -52,8 +52,11 @@ USER_EMAIL=you@example.com                   # where reports are delivered
 ### Step 4 — Send a test email
 
 ```bash
-atlas email '{"to":"you@example.com","subject":"Atlas OS test","body_html":"<p>It works 🎉</p>"}'
+atlas email --to you@example.com --subject "Atlas OS test" --body "<p>It works 🎉</p>"
 ```
+
+> Prefer a raw payload (e.g. to attach files or send to a list)? Pass it with
+> `--json`: `atlas email --json '{"to":"…","subject":"…","body_html":"…","attachments":["/path/file.pdf"]}'`.
 
 Check your inbox. If it fails, the most common causes are: a space left in the
 app password, 2FA not actually enabled, or `SENDER_EMAIL` not matching the

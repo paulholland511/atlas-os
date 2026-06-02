@@ -27,10 +27,26 @@ plain-text bodies and file attachments.
 
 ## Usage
 
-`atlas email` (and `scripts/send_email.py`) takes a single **JSON payload**:
+For a quick message, `atlas email` takes flags:
 
 ```bash
-atlas email '{
+atlas email --to me@example.com --subject "Daily report" --body "<h1>Hello</h1><p>…</p>"
+atlas email -s "Daily report" -b "plain body" --text --attach /path/report.pdf
+```
+
+| Flag | Required | Notes |
+|---|---|---|
+| `--to` | no | recipient; defaults to `USER_EMAIL` |
+| `--subject` / `-s` | **yes** | subject line |
+| `--body` / `-b` | **yes** | HTML by default; add `--text` for plain text |
+| `--text` | no | send `--body` as `text/plain` instead of HTML |
+| `--attach` / `-a` | no | file to attach (repeatable) |
+
+For a list of recipients, both body types, or a scripted payload, use `--json`
+(the same shape `scripts/send_email.py` accepts directly as its argument):
+
+```bash
+atlas email --json '{
   "to": "me@example.com",
   "subject": "Daily report",
   "body_html": "<h1>Hello</h1><p>…</p>",

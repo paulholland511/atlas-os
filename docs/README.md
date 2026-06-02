@@ -22,7 +22,9 @@ the source — see [**features/**](features/README.md):
 - [**QUICKSTART.md**](QUICKSTART.md) — zero to working setup in 5 minutes.
 - [**EXAMPLES.md**](EXAMPLES.md) — copy-paste walkthroughs: Gmail SMTP, LM Studio,
   first scheduled task, first RAG embed.
-- [**SETUP.md**](SETUP.md) — step-by-step installation from scratch.
+- [**SETUP.md**](SETUP.md) — step-by-step installation from scratch, the
+  core-vs-optional feature matrix, and a [Docker quick-start](SETUP.md#run-in-docker-optional)
+  (root [`Dockerfile`](../Dockerfile) · [`docker-compose.yml`](../docker-compose.yml)).
 - [**CONFIGURATION.md**](CONFIGURATION.md) — every environment variable: purpose,
   default, required/optional, and which scripts read it.
 - [**SCRIPTS.md**](SCRIPTS.md) — complete CLI reference for every script and all

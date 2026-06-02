@@ -39,6 +39,24 @@ the maintainers receive nothing about your usage.
   (requires 2FA), never your account password.
 - Never paste secrets into notes, `SKILL.md` prompts, or code.
 
+## Running in containers (Docker)
+
+The optional [`Dockerfile`](Dockerfile) / [`docker-compose.yml`](docker-compose.yml)
+preserve the local-first, secrets-in-env model:
+
+- **No secrets in the image.** `.dockerignore` excludes `.env` (and `.env.*`
+  except `.env.example`) from the build context, so credentials are never baked
+  into an image layer. They are supplied only at **runtime** via `--env-file .env`
+  (compose `env_file:`), the same way the host shell loads them.
+- **No vault data in the image.** Your vault is **bind-mounted** at run time
+  (`-v …:/vault`), not copied in at build time. The image contains only the
+  public repo's code/scripts — the same Public-class data already on GitHub.
+- **Don't push images built with `--build-arg EXTRAS` to a public registry**
+  without re-checking they contain no local state; prefer building locally.
+- **Local network only.** A host LLM is reached over `host.docker.internal`;
+  nothing in the container phones home. Treat the container like the CLI — it
+  inherits the same data-classification rules above.
+
 ## ISO 27001 alignment
 
 This repository is designed to support an information-security posture aligned

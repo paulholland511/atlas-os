@@ -206,6 +206,15 @@ set -a; source .env; set +a
 python3 scripts/health_check.py
 ```
 
+### Or run in Docker (no host Python)
+
+```bash
+docker build -t atlas-os .      # add --build-arg EXTRAS=".[all]" for trading/pdf
+VAULT_PATH=~/Documents/Obsidian/MyVault docker compose run --rm atlas doctor
+```
+
+Full details in the [Docker section](#docker-optional) below.
+
 ### Updating / uninstalling
 
 ```bash
@@ -528,11 +537,12 @@ analyst votes — never your notes or positions. Install extras with
 
 `atlas email` / `scripts/send_email.py` is a credential-free SMTP sender: the
 app password comes from `SMTP_APP_PASSWORD`, the sender from `SENDER_EMAIL`,
-nothing hardcoded. It takes a JSON payload (`to`, `subject`, `body_html`,
-`body_text`, `attachments`).
+nothing hardcoded. Use the simple flags for a quick message, or `--json` for a
+full payload (`to`, `subject`, `body_html`, `body_text`, `attachments`).
 
 ```bash
-atlas email '{"to":"me@example.com","subject":"Report","body_html":"<p>…</p>","attachments":["/path/report.pdf"]}'
+atlas email -s "Report" -b "<p>…</p>" --to me@example.com
+atlas email --json '{"to":"me@example.com","subject":"Report","body_html":"<p>…</p>","attachments":["/path/report.pdf"]}'
 ```
 
 For Gmail, generate an [app password](https://myaccount.google.com/apppasswords)

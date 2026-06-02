@@ -9,8 +9,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from config import AGENT_WEIGHTS
-from core import Agent, ModelConfig
+from ..config import AGENT_WEIGHTS
+from ..core import Agent, ModelConfig
 
 logger = logging.getLogger(__name__)
 

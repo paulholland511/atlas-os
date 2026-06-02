@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from core import Agent, ModelConfig
+from ..core import Agent, ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,6 @@ class TechnicalAgent(Agent):
         sma_20 = indicators.get("sma_20", 0)
         sma_50 = indicators.get("sma_50", 0)
         bb_upper = indicators.get("bollinger_upper", 0)
-        bb_middle = indicators.get("bollinger_middle", 0)
         bb_lower = indicators.get("bollinger_lower", 0)
         latest_price = indicators.get("latest_price", 0)
 

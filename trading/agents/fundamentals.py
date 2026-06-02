@@ -12,8 +12,8 @@ from typing import Any
 
 import yfinance as yf
 
-from config import CRYPTO_COINGECKO_IDS
-from core import Agent, ModelConfig, ModelUnavailable, call_model, get_lm_studio_config
+from ..config import CRYPTO_COINGECKO_IDS
+from ..core import Agent, ModelConfig, ModelUnavailable, call_model, get_lm_studio_config
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +74,6 @@ class FundamentalsAgent(Agent):
             logger.warning(f"Crypto data error for {ticker}: {crypto_data.get('error')}")
             # Fall back to price-only analysis
             return self._deterministic_crypto_analysis(ticker, price_history, None)
-
-        market_cap = crypto_data.get("market_cap_usd", 0)
-        rank = crypto_data.get("rank", 999)
-        price_change_24h = crypto_data.get("price_change_24h_pct", 0)
-        ath = crypto_data.get("ath_usd", 0)
-        current_price = crypto_data.get("price_usd", 0)
 
         # Try LLM analysis, fall back to deterministic
         try:

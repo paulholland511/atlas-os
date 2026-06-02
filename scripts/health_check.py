@@ -180,7 +180,7 @@ def check_git() -> Result:
         ["git", "-C", str(VAULT), "status", "--porcelain"],
         capture_output=True, text=True, timeout=10,
     )
-    dirty_count = len([l for l in r.stdout.splitlines() if l.strip()])
+    dirty_count = len([line for line in r.stdout.splitlines() if line.strip()])
     checks.append(("working tree", dirty_count == 0, f"{dirty_count} changed paths"))
     r2 = subprocess.run(
         ["git", "-C", str(VAULT), "log", "-1", "--format=%h %s"],

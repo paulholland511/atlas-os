@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from core import Agent, ModelConfig
+from ..core import Agent, ModelConfig
 
 logger = logging.getLogger(__name__)
 

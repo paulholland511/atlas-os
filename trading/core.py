@@ -6,7 +6,6 @@ that supports LM Studio (OpenAI-compatible) and Anthropic endpoints.
 """
 from __future__ import annotations
 
-import json
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -17,7 +16,7 @@ from typing import Any
 
 import requests
 
-from config import (
+from .config import (
     LM_STUDIO_ENDPOINT,
     LM_STUDIO_MODEL,
     ANTHROPIC_MODEL,

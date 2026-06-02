@@ -21,6 +21,13 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   git) that packages the `atlas` CLI, a [`docker-compose.yml`](docker-compose.yml)
   that bind-mounts your vault and loads `.env`, and a `.dockerignore`. Run any
   subcommand in a container without installing Python tooling on the host.
+  Build-tested end-to-end (`atlas --version` / `doctor` / `commit` against a
+  bind-mounted vault), with three fixes from that pass: copy the
+  `scripts/schemas/templates/skills` dirs *before* `pip install` (the wheel
+  force-includes them, so the build failed without them); `git config --global
+  --add safe.directory` so git operations work on a vault owned by a non-root
+  host user (avoids "dubious ownership"); and an optional `env_file` so compose
+  runs before a `.env` exists.
 - **CLI tests** ([`tests/test_cli.py`](tests/test_cli.py)) covering `--version`,
   every registered subcommand, and the env-validation guards.
 - **Core vs optional** section in [`docs/SETUP.md`](docs/SETUP.md) separating the

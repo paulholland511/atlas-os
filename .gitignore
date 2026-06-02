@@ -71,3 +71,6 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# ── Local Claude Code / agent tooling state (not part of the public repo) ────
+.claude/

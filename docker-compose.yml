@@ -23,14 +23,21 @@ services:
         # Use ".[all]" to bake in the optional trading + pdf extras.
         EXTRAS: "."
     image: atlas-os
-    # Secrets and config come from your local .env (git-ignored).
+    # Secrets and config come from your local .env (git-ignored). Marked optional
+    # so the container still runs before you've created one — values can also come
+    # from your shell or `-e` flags.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       # The vault is mounted at /vault below — override whatever .env says.
       VAULT_PATH: /vault
     volumes:
-      # ← change the host path to your real vault.
+      # ← change the host path to your real vault. It must be a directory your
+      # Docker engine shares with its VM — paths under your home directory are
+      # safest (Docker Desktop shares $HOME; colima shares $HOME but not the
+      # macOS /tmp/$TMPDIR). A path the VM can't see shows up empty inside the
+      # container.
       - "${VAULT_PATH:-./vault}:/vault"
     # On Linux, uncomment so host.docker.internal resolves to the host LLM:
     # extra_hosts:

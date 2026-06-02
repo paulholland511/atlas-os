@@ -24,3 +24,11 @@ pdfplumber==0.11.9        # extract text from PDFs for the RAG index
 
 # ── Cloud model step (optional — only the opt-in trading Portfolio Manager) ──
 anthropic==0.105.2        # used only if you enable the cloud step in trading/
+
+# ── Development & CI (NOT imported by Atlas OS at runtime) ────────────────────
+# These are only needed to run the test suite, linter, and dependency audit —
+# the same checks GitHub Actions runs on every push (see .github/workflows/ci.yml).
+# Install with:  pip install -r requirements.txt   (or just `pip install pytest ruff pip-audit`)
+pytest==9.0.3            # test runner — `pytest`
+ruff==0.15.15            # linter / formatter — `ruff check`
+pip-audit==2.10.0        # scans dependencies for known CVEs — `pip-audit`

@@ -56,6 +56,7 @@ account.
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
+- [Development & testing](#development--testing)
 - [Contributing](#contributing)
 - [License & disclaimer](#license--disclaimer)
 
@@ -584,6 +585,8 @@ atlas-os/
 ├── atlas_os/        the `atlas` CLI package (init, doctor, skills, wrappers)
 ├── pyproject.toml   packaging — `uv tool install` / `pipx` / `pip install -e .`
 ├── scripts/         embed · graph · commit · changelog · email · health · trade
+├── tests/           pytest suite for the core scripts (hermetic, no network)
+├── .github/         GitHub Actions CI (ruff · pytest · pip-audit)
 ├── skills/          9 scheduled-task SKILL.md prompts (templated)
 ├── schemas/         frontmatter schema enforcement + docs
 ├── templates/       CLAUDE.md, memory structure, vault skeleton, ops dashboard
@@ -647,6 +650,36 @@ Ideas on the table (contributions welcome):
   llama.cpp / any OpenAI-compatible endpoint.
 - **PyPI release** — `pipx install atlas-os` without the git URL.
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
+
+---
+
+## Development & testing
+
+Atlas OS ships with a `pytest` suite covering the core scripts (text helpers,
+graph building, git-status parsing, scoring, SMTP flow, and the trading
+briefing) — all hermetic: no network, no env vars, no real vault required.
+
+```bash
+# From a source checkout, install the dev tooling (test runner, linter, auditor):
+pip install -r requirements.txt        # or: pip install pytest ruff pip-audit
+
+# Run the full suite:
+pytest                                 # config lives in pyproject.toml
+
+# Lint and audit exactly as CI does:
+ruff check scripts tests
+pip-audit -r requirements.txt
+```
+
+Tests live in [`tests/`](tests/) and stub every external dependency
+(`requests`, `smtplib`, `git`, and the optional `tradingagents` package) so they
+run in well under a second. `tests/conftest.py` points `VAULT_PATH`/`RAG_DIR` at
+a throwaway temp directory before any script is imported, so running the suite
+never touches your real vault.
+
+Every push and pull request to `main` runs the same three checks on GitHub
+Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): **ruff →
+pytest → pip-audit** on Python 3.12. Please run them locally before opening a PR.
 
 ---
 

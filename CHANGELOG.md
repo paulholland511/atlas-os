@@ -7,6 +7,16 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Automated test suite** in [`tests/`](tests/) — 74 hermetic `pytest` tests
+  covering the core scripts (`embed_vault`, `build_graph`, `health_check`,
+  `send_email`, `vault_commit`, `vault_changelog`, `trading_briefing`). They stub
+  every external dependency (network, SMTP, git, and the optional
+  `tradingagents` package) and point `VAULT_PATH`/`RAG_DIR` at a temp directory,
+  so they need no env vars, no network, and never touch a real vault.
+- **GitHub Actions CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+  — runs ruff, pytest, and pip-audit on every push and pull request to `main`.
+- **Development & testing** section in the README and dev/CI tooling (`pytest`,
+  `ruff`, `pip-audit`) added to `requirements.txt`.
 - **Feature deep-dive docs** in [`docs/features/`](docs/features/README.md) — one
   per feature, explaining how it actually works (internals, data formats,
   configuration, edge cases), grounded in the source: knowledge vault & schemas,

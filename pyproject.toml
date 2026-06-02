@@ -60,3 +60,7 @@ packages = ["atlas_os"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

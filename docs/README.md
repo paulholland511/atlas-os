@@ -57,6 +57,9 @@ the source — see [**features/**](features/README.md):
 
 - [**../CONTRIBUTING.md**](../CONTRIBUTING.md) — contribution guidelines and the
   golden rule (never commit personal data).
+- [**Development & testing**](../README.md#development--testing) — running the
+  `pytest` suite, `ruff`, and `pip-audit` locally (the same checks CI runs on
+  every push via [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 - [**../CHANGELOG.md**](../CHANGELOG.md) — release history.
 
 ---

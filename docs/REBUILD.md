@@ -27,12 +27,11 @@ git --version
 ## 2. Repo + environment
 
 ```bash
-git clone https://github.com/<you>/atlas-os.git ~/code/atlas-os
-cd ~/code/atlas-os
-python3 -m venv .venv && source .venv/bin/activate
-pip install requests pyyaml pdfplumber yfinance
-cp .env.example .env && $EDITOR .env        # fill in real values
-set -a; source .env; set +a
+# Install the package (gives you the `atlas` command):
+uv tool install "atlas-os[all] @ git+https://github.com/paulholland511/atlas-os"
+#   or from a clone:  git clone … && cd atlas-os && pip install -e ".[all]"
+
+atlas init        # detect LLM, write .env, scaffold/refresh the vault skeleton
 ```
 
 ## 3. Restore the vault
@@ -53,11 +52,9 @@ Everything below is **regenerated** from the vault — none of it is backed up o
 committed, by design.
 
 ```bash
-# Frontmatter consistency
-python3 schemas/enforce_schemas.py
-
-# Full RAG re-embed (requires the local LLM) — also rebuilds the graph
-python3 scripts/embed_vault.py --full
+atlas schemas             # frontmatter consistency
+atlas embed --full        # full RAG re-embed (needs the local LLM) — also rebuilds the graph
+atlas skills --sync       # regenerate the Skills Catalog note in the vault
 ```
 
 ## 5. Restore secrets & credentials
@@ -77,7 +74,8 @@ python3 scripts/embed_vault.py --full
 ## 7. Verify
 
 ```bash
-python3 scripts/health_check.py
+atlas doctor      # setup validation
+atlas health      # full subsystem probe
 ```
 
 Aim for every subsystem UP (or DEGRADED where a component is intentionally not

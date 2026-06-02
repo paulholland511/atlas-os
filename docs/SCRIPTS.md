@@ -27,7 +27,10 @@ atlas schemas --folder projects
 | `atlas email` | `scripts/send_email.py` |
 | `atlas schemas` | `schemas/enforce_schemas.py` |
 
-(`atlas init` and `atlas doctor` are CLI-only — see [SETUP.md](SETUP.md).)
+CLI-only commands (no script equivalent): `atlas init` and `atlas doctor` (see
+[SETUP.md](SETUP.md)), and `atlas skills` — list the agent skills catalog, or
+`atlas skills --sync` to (re)generate the `Skills Catalog.md` note in your vault
+(see [SCHEDULED-TASKS.md](SCHEDULED-TASKS.md#the-skills-catalog-agent-discovery)).
 
 To run the scripts **directly** instead, load your env first:
 

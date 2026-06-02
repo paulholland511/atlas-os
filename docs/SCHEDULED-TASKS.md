@@ -37,6 +37,34 @@ values, then register it on the cadence below.
 > useful if those workflows apply to you. Start with the index + RAG + health
 > tasks and add others as needed.
 
+## The skills catalog (agent discovery)
+
+Atlas OS keeps a **Skills Catalog** note inside your vault — a single,
+always-current index of every skill this install ships. Its purpose is
+*discovery*: any agent that reads or searches your vault (via RAG, or by opening
+the note directly) can see the full menu of automations it can invoke, without
+you having to describe them each time.
+
+```bash
+atlas skills          # list the catalog in the terminal
+atlas skills --sync   # (re)generate "Skills Catalog.md" in your vault
+```
+
+`atlas init` generates it for you on first setup. The note is built from each
+`skills/<name>/SKILL.md` frontmatter (its `name` and `description`), so it never
+drifts from the actual skills — **re-run `atlas skills --sync` whenever you add,
+remove, or edit a skill**. It's auto-generated, so don't hand-edit it.
+
+The catalog lands at `Skills Catalog.md` in the vault root (override with
+`atlas skills --sync --output PATH`) and carries `type: reference` frontmatter so
+the RAG indexer picks it up like any other note. Because it's just a vault note,
+it's covered by the same local-first guarantees as everything else — it never
+leaves your machine.
+
+> Adding your own skill? Drop a `skills/<slug>/SKILL.md` with `name` and
+> `description` frontmatter, then `atlas skills --sync`. It appears in the
+> catalog automatically.
+
 ## Notes on safety
 
 - Job-tracker and trading tasks touch **confidential** data (see

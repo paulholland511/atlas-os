@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 from atlas_os import __version__
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import detect_endpoints
+from atlas_os._skills import default_catalog_path, load_skills, render_catalog
 
 # ── Auto-load .env (repo root first, then cwd, which wins) ────────────────────
 _root = repo_root()
@@ -128,6 +129,56 @@ def email(ctx: typer.Context) -> None:
 def schemas(ctx: typer.Context) -> None:
     """Enforce per-folder frontmatter schemas (--dry-run | --folder | --verbose)."""
     _run(schemas_dir() / "enforce_schemas.py", ctx.args)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# skills — the agent skills catalog
+# ─────────────────────────────────────────────────────────────────────────────
+def _resolve_vault() -> Path | None:
+    vault_env = os.environ.get("VAULT_PATH")
+    if not vault_env:
+        return None
+    return Path(os.path.expanduser(vault_env))
+
+
+def _write_catalog(vault: Path, output: Path | None) -> Path:
+    """Generate the Skills Catalog note into the vault. Returns the path."""
+    path = output or default_catalog_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_catalog(load_skills()), encoding="utf-8")
+    return path
+
+
+@app.command()
+def skills(
+    sync: bool = typer.Option(
+        False, "--sync", help="Write/refresh the catalog note in the vault."
+    ),
+    output: Path = typer.Option(
+        None, "--output", help="Override the catalog note path (with --sync)."
+    ),
+) -> None:
+    """List the agent skills catalog; ``--sync`` writes it into the vault."""
+    items = load_skills()
+    if not items:
+        _echo_warn("no skills found")
+        raise typer.Exit()
+
+    typer.secho(f"\nAgent skills catalog ({len(items)} skill(s)):\n", bold=True)
+    for s in items:
+        typer.secho(f"  {s.name}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f"  [{s.cadence}]")
+        typer.echo(f"    {s.description}")
+
+    if sync:
+        vault = _resolve_vault()
+        if vault is None or not vault.is_dir():
+            _echo_fail("VAULT_PATH is not set or does not exist — run `atlas init`")
+            raise typer.Exit(code=1)
+        path = _write_catalog(vault, output)
+        _echo_ok(f"wrote catalog → {path}")
+    else:
+        typer.echo("\nRun `atlas skills --sync` to write this into your vault.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -272,6 +323,11 @@ def init(
     # 5. Scaffold the vault
     typer.echo("\nScaffolding the vault skeleton…")
     _scaffold_vault(vault_path)
+    try:
+        catalog = _write_catalog(vault_path, None)
+        _echo_ok(f"generated {catalog.relative_to(vault_path)}")
+    except (FileNotFoundError, OSError) as exc:
+        _echo_warn(f"could not generate the skills catalog ({exc})")
     _git_init(vault_path)
 
     # 6. CLAUDE.md (opt-in)

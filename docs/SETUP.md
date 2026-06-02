@@ -129,6 +129,14 @@ the `{{PLACEHOLDER}}` tokens with your real values. See
 [`SCHEDULED-TASKS.md`](SCHEDULED-TASKS.md) for suggested cadences and the full
 placeholder list.
 
+`atlas init` already wrote a **`Skills Catalog.md`** into your vault so agents can
+discover what's available. Refresh it any time you add or change a skill:
+
+```bash
+atlas skills          # list the catalog
+atlas skills --sync   # regenerate the catalog note in the vault
+```
+
 ## 9. Verify
 
 ```bash

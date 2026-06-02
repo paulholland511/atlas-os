@@ -6,6 +6,20 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-02
+
+### Added
+- **Agent skills catalog.** A self-updating `Skills Catalog.md` note generated
+  into the vault, listing every skill (name, description, suggested cadence)
+  read from each `skills/*/SKILL.md` frontmatter — so agents reading or
+  searching the vault can discover what automations they can invoke. Carries
+  `type: reference` frontmatter so the RAG indexer picks it up.
+- **`atlas skills`** — list the catalog in the terminal; `atlas skills --sync`
+  (re)generates the note in the vault (`--output` to override the path).
+  `atlas init` now generates it automatically on setup.
+- The `skills/` directory is bundled into the wheel so the catalog works in an
+  installed `atlas` without the source checkout.
+
 ## [0.2.0] — 2026-06-02
 
 ### Added
@@ -67,6 +81,7 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documentation: setup, architecture, rebuild runbook, scheduled tasks, data
   classification; `SECURITY.md`, `CONTRIBUTING.md`, MIT `LICENSE`.
 
-[Unreleased]: https://github.com/paulholland511/atlas-os/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/paulholland511/atlas-os/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/paulholland511/atlas-os/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/paulholland511/atlas-os/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/paulholland511/atlas-os/releases/tag/v0.1.0

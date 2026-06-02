@@ -71,3 +71,8 @@ def schemas_dir() -> Path:
 def templates_dir() -> Path:
     """Directory containing CLAUDE.md.template, the vault skeleton, etc."""
     return _resolve("templates")
+
+
+def skills_dir() -> Path:
+    """Directory containing the scheduled-task skill folders (each a SKILL.md)."""
+    return _resolve("skills")

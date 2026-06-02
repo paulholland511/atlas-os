@@ -42,8 +42,10 @@ Eight composable systems:
    backlinks and "related notes".
 4. **Git automation** — auto-commit the vault with categorised messages and
    generate changelogs for a morning briefing.
-5. **Scheduled tasks** — nightly indexing, daily reports, weekly health checks,
-   and more, as Claude Cowork skills.
+5. **Scheduled tasks & skills catalog** — nightly indexing, daily reports,
+   weekly health checks and more, as Claude Cowork skills, plus a
+   self-updating `Skills Catalog.md` in the vault so agents can discover every
+   automation they can invoke.
 6. **Email reports** — credential-free SMTP sender for status reports and
    newsletters.
 7. **Trading research SDK** *(optional)* — a multi-agent market-research
@@ -94,8 +96,9 @@ a `.env` in the current directory or repo root is auto-loaded — no manual
 
 | Command | What it does |
 |---|---|
-| `atlas init` | Guided onboarding — detect LLM, write `.env`, scaffold vault, install templates |
+| `atlas init` | Guided onboarding — detect LLM, write `.env`, scaffold vault, generate the skills catalog |
 | `atlas doctor` | Validate the setup; report OK / WARN / FAIL per subsystem |
+| `atlas skills` | List the agent skills catalog; `--sync` writes it into the vault |
 | `atlas embed` | Build/refresh the RAG index (`--full`, `--incremental`, `--test N`, …) |
 | `atlas graph` | Rebuild the wikilink knowledge graph |
 | `atlas commit` | Auto-commit the vault with a categorised message |

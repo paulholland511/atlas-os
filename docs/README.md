@@ -15,7 +15,8 @@ overview, then dive in here.
 ## Operating it
 
 - [**SCHEDULED-TASKS.md**](SCHEDULED-TASKS.md) — the Claude Cowork skills, their
-  cadences, and the placeholder tokens.
+  cadences, the placeholder tokens, and the in-vault **skills catalog** agents
+  use for discovery.
 - [**REBUILD.md**](REBUILD.md) — disaster-recovery / clean-install runbook.
 
 ## Design & data

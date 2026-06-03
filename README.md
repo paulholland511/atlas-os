@@ -236,7 +236,10 @@ pipx install "git+https://github.com/paulholland511/atlas-os"
 
 > **Coming to PyPI.** Once Atlas OS is published, the git URL won't be needed —
 > `pipx install atlas-os` (or `uv tool install atlas-os`, `pip install atlas-os`)
-> will be the one-liner. The packaging is already PyPI-ready; see
+> will be the one-liner. The packaging is already PyPI-ready and releases are
+> automated: pushing a `v*` tag builds, tests, and publishes via GitHub Actions
+> + [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC,
+> no stored token). Until the first upload lands, use the git URL above. See
 > [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the release runbook.
 
 **With optional extras** (trading needs `yfinance`, PDF embedding needs

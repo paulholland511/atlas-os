@@ -1,0 +1,101 @@
+name: Publish to PyPI
+
+# Tag a release and this publishes it to PyPI — no stored token. Authentication
+# uses PyPI Trusted Publishing (OIDC): GitHub mints a short-lived identity token
+# that PyPI trusts because of the one-time trusted-publisher config on the
+# project (repo + workflow + environment). See docs/PUBLISHING.md.
+#
+# Release flow:
+#   bump __version__ in atlas_os/__init__.py → commit → git tag v0.4.0
+#   → git push origin v0.4.0 → this workflow runs (test → build → publish).
+#
+# workflow_dispatch lets you dry-run the build/test stages by hand without
+# tagging; the publish job is skipped unless the trigger is a v* tag push.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test before release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: ruff check scripts tests
+
+      - name: Run tests
+        run: pytest
+
+  build:
+    name: Build distributions
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distribution metadata
+        run: twine check dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # Only publish for an actual v* tag push, never for a manual dispatch.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/project/atlas-os/
+    permissions:
+      # OIDC: required for Trusted Publishing. No username/password/token.
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

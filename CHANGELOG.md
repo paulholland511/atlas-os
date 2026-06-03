@@ -7,6 +7,18 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Automated PyPI publishing via GitHub Actions + Trusted Publishing.** Pushing
+  a `v*` tag (e.g. `v0.4.0`) now builds, tests, and publishes the release to
+  PyPI with no stored token — authentication is
+  [OIDC Trusted Publishing](https://docs.pypi.org/trusted-publishers/).
+  [`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs
+  `test → build → publish`: lint + `pytest`, then `python -m build` +
+  `twine check`, then `pypa/gh-action-pypi-publish` against the `pypi`
+  environment with `id-token: write`. A companion
+  [`.github/workflows/test-publish.yml`](.github/workflows/test-publish.yml)
+  routes pre-release tags (`v*rc*`, `v*dev*`) to TestPyPI for dress rehearsals.
+  [`docs/PUBLISHING.md`](docs/PUBLISHING.md) documents the flow and the one-time
+  PyPI trusted-publisher setup (pending-publisher or manual-first-upload).
 - **`atlas skills install <name>`** — one-command skill deployment. Copies a
   skill's `SKILL.md` into your scheduled-tasks directory (`$ATLAS_SKILLS_DIR`,
   default `$VAULT_PATH/.claude/skills/<name>/`) and substitutes its

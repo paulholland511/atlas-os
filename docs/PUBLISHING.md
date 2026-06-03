@@ -126,7 +126,91 @@ atlas skills list        # operational data dirs are bundled and discoverable
 
 ---
 
-> **Automating it.** Once you're comfortable, move steps 3–6 into a GitHub
-> Actions workflow triggered on `v*` tags, using
-> [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) so
-> no token is stored in the repo.
+## Automated publishing (GitHub Actions + Trusted Publishing)
+
+The manual runbook above is the fallback. The normal path is automated:
+**push a `v*` tag and GitHub Actions builds, tests, and publishes to PyPI** —
+no stored token, no `twine upload` from your laptop.
+
+This uses [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+(OIDC). Instead of a long-lived API token sitting in the repo, GitHub mints a
+short-lived identity token for each run; PyPI trusts it because of a one-time
+trusted-publisher config you add on pypi.org tying the project to this exact
+repo + workflow + environment. Nothing secret is stored anywhere.
+
+The workflows live in [`.github/workflows/`](../.github/workflows):
+
+- **`publish.yml`** — triggers on `v*` tags (e.g. `v0.4.0`). Runs `test` →
+  `build` → `publish`. The publish job uses the `pypi` environment and
+  `id-token: write`, and only runs for a real tag push (not manual dispatch).
+- **`test-publish.yml`** — triggers on pre-release tags (`v*rc*`, `v*dev*`,
+  e.g. `v0.4.0rc1`). Identical, but publishes to **TestPyPI** using the
+  `testpypi` environment. Use it to rehearse the whole flow safely.
+
+### One-time PyPI setup (Paul — do this before the first release)
+
+Trusted publishing must be configured **before** the first upload. You have two
+options:
+
+**Option A — pending publisher (recommended; no manual upload needed).**
+PyPI lets you pre-register a trusted publisher for a project that *doesn't exist
+yet*. The first time the workflow runs, PyPI creates the project and binds it.
+
+1. Sign in to <https://pypi.org> → your account → **Publishing** (or go directly
+   to <https://pypi.org/manage/account/publishing/>).
+2. Under **Add a new pending publisher**, fill in:
+   - **PyPI Project Name:** `atlas-os`
+   - **Owner:** `paulholland511`
+   - **Repository name:** `atlas-os`
+   - **Workflow name:** `publish.yml`
+   - **Environment name:** `pypi`
+3. Save. The first `v*` tag push will create and publish the project.
+
+**Option B — manual first upload, then configure.**
+If you'd rather claim the name immediately:
+
+1. Do one manual `twine upload dist/*` (steps 1–6 above) to create the
+   `atlas-os` project on PyPI.
+2. Then on the project: **Manage → Publishing → Add a new publisher**, with the
+   same values as Option A (Owner `paulholland511`, Repo `atlas-os`, Workflow
+   `publish.yml`, Environment `pypi`).
+3. From then on, tags publish automatically; you never need a token again.
+
+**For TestPyPI** (to use `test-publish.yml`): repeat the same on
+<https://test.pypi.org/manage/account/publishing/>, but set the **Environment
+name** to `testpypi`.
+
+> **GitHub environments.** The `pypi` (and `testpypi`) environment names in the
+> workflows don't need to pre-exist — GitHub creates them on first use. If you
+> want a manual approval gate before a release goes out, create the `pypi`
+> environment under the repo's **Settings → Environments** and add yourself as a
+> required reviewer.
+
+### The release flow, end to end
+
+```bash
+# 1. Bump the single source of truth
+#    edit atlas_os/__init__.py:  __version__ = "0.4.0"
+
+# 2. Move CHANGELOG [Unreleased] under ## [0.4.0] — YYYY-MM-DD, then commit
+git add atlas_os/__init__.py CHANGELOG.md
+git commit -m "Release 0.4.0"
+git push origin main
+
+# 3. Tag and push — this is what triggers the publish
+git tag -a v0.4.0 -m "Atlas OS 0.4.0"
+git push origin v0.4.0
+```
+
+GitHub Actions takes it from there: lint + tests run, the sdist and wheel are
+built and `twine check`ed, and the publish job uploads to PyPI via OIDC. Watch
+it under the repo's **Actions** tab. To rehearse first, tag `v0.4.0rc1` and push
+— that routes to TestPyPI via `test-publish.yml`.
+
+After it's green, create a GitHub Release from the tag and paste the CHANGELOG
+section, then verify:
+
+```bash
+pip install --upgrade atlas-os
+atlas --version          # should print the new version
+```

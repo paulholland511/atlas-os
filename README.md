@@ -21,6 +21,21 @@
 [![No telemetry](https://img.shields.io/badge/telemetry-none-brightgreen.svg)](SECURITY.md)
 [![Docs](https://img.shields.io/badge/docs-complete-informational.svg)](docs/README.md)
 
+### ✅ Already built and shipping
+
+Everything below is **in the box today** — not roadmap, not "coming soon":
+
+- 🧙 **Interactive setup wizard** (`atlas init`) — zero to running in 5 minutes
+- 🔌 **Pluggable LLM backends** — auto-detects LM Studio, Ollama, llama.cpp, or any OpenAI-compatible endpoint
+- 📋 **Audit trail** — append-only JSONL logging every autonomous action (ISO 27001 aligned)
+- 🐳 **Docker support** — `Dockerfile` + `docker-compose.yml` included
+- 🩺 **Smart diagnostics** — `atlas doctor --fix` detects and repairs issues automatically
+- ✅ **290+ automated tests** with CI/CD on every push
+- 💾 **Session capture** — every Cowork conversation saved to your vault twice daily
+- 📚 **160+ skills catalogue** with one-command `atlas skills install-pack`
+
+---
+
 **Atlas OS** turns [Claude Cowork](https://claude.ai/) into a personal,
 local-first operating system over a markdown knowledge vault. It gives you a
 searchable second brain, scheduled autonomous agents, automatic git history, and
@@ -68,6 +83,7 @@ account.
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
+- [Frequently asked](#frequently-asked)
 - [Roadmap](#roadmap)
 - [Development & testing](#development--testing)
 - [Contributing](#contributing)
@@ -242,9 +258,10 @@ Eleven composable systems, each usable on its own:
    *Not financial advice.*
 10. **Voice / TTS hooks & dashboard** *(optional)* — health-check probes for a
    local TTS service, plus a static, single-file operations dashboard.
-11. **Audit trail** — an append-only JSONL log of every autonomous action (what
-   ran, how it was triggered, the outcome, duration, and what changed), with
-   `atlas audit show / tail / export` for inspection and CSV compliance reports.
+11. **Audit trail / logging** — append-only JSONL logging of every autonomous
+   action (what ran, how it was triggered, the outcome, duration, and what
+   changed), with `atlas audit show / tail / export` for inspection and CSV
+   compliance reports. ISO 27001 aligned (A.12.4).
 
 > **How does each one work?** Every feature has a deep-dive doc (internals, data
 > formats, config) in [`docs/features/`](docs/features/README.md) — e.g.
@@ -413,7 +430,9 @@ defaults), `--force` (overwrite an existing `.env`).
 
 **`atlas doctor`** reports OK / WARN / FAIL for Python, the vault (exists + git),
 the RAG index, the embeddings endpoint, and SMTP — and exits non-zero if
-anything is FAIL. Example:
+anything is FAIL. Run **`atlas doctor --fix`** and it repairs what it safely can
+(clearing stale locks, initialising the vault's git repo, re-running the setup
+wizard for missing config) instead of just reporting. Example:
 
 ```
 Atlas OS — doctor
@@ -441,8 +460,8 @@ underlying script.
 
 | Command | What it does | Key flags |
 |---|---|---|
-| `atlas init` | Guided onboarding — detect LLM, write `.env`, scaffold vault, generate the skills catalog | `--vault`, `--yes`, `--force` |
-| `atlas doctor` | Validate the setup; OK / WARN / FAIL per subsystem | — |
+| `atlas init` | Interactive setup wizard — detect LLM, write `.env`, scaffold vault, generate the skills catalog | `--vault`, `--yes`, `--force` |
+| `atlas doctor` | Smart diagnostics — validate the setup (OK / WARN / FAIL per subsystem) and optionally repair issues | `--fix` |
 | `atlas skills` | List the agent skills catalog | `--sync`, `--output` |
 | `atlas skills list` | List every available skill (slug + cadence) | — |
 | `atlas skills show` | Print a skill's `SKILL.md` | — |
@@ -948,6 +967,35 @@ Full docs live in [`docs/`](docs/README.md):
 
 More: [`docs/FAQ.md`](docs/FAQ.md). For a clean rebuild:
 [`docs/REBUILD.md`](docs/REBUILD.md).
+
+---
+
+## Frequently asked
+
+- **Does it support Ollama?** Yes. The [pluggable LLM backends](#features)
+  auto-detect Ollama (alongside LM Studio, llama.cpp, and any OpenAI-compatible
+  endpoint). Run `atlas backends` to see what's reachable, or force it with
+  `ATLAS_LLM_BACKEND=ollama`.
+- **Is there a setup wizard?** Yes — `atlas init` is an interactive wizard that
+  detects your LLM, writes `.env`, scaffolds the vault, and makes the first
+  commit. Zero to running in about 5 minutes. See
+  [First run](#first-run-walkthrough).
+- **Does it have logging?** Yes — an append-only JSONL [audit trail](#audit-trail)
+  records every autonomous action (what ran, how, the outcome, duration, and what
+  changed). Inspect it with `atlas audit show` / `tail` / `export` (CSV for
+  compliance).
+- **Can I run it in Docker?** Yes — a `Dockerfile` and `docker-compose.yml` ship
+  in the repo root. Bind-mount your vault and run any subcommand in a container.
+  See [Docker](#docker-optional).
+- **Is there a config file?** Yes — everything is configured through a `.env`
+  file (no hardcoded paths, hosts, emails, or secrets). `atlas init` generates a
+  commented one for you; [`.env.example`](.env.example) documents every variable.
+  See [Configuration](#configuration).
+- **Is there a dashboard?** Yes — a self-contained, single-file ops
+  [dashboard](#dashboard-optional) (`templates/ops-dashboard.html`) backed by
+  `atlas health --json` and `atlas changelog --json`.
+- **How do I fix a broken setup?** Run `atlas doctor --fix` — it diagnoses each
+  subsystem and repairs what it safely can.
 
 ---
 

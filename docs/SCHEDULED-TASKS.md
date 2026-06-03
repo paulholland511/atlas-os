@@ -1,11 +1,29 @@
 # Scheduled Tasks
 
 Atlas OS automations are Claude Cowork **skills** run on a schedule. Each lives
-in `skills/<name>/SKILL.md`. To install one, copy its folder into your Claude
-scheduled-tasks directory and replace the `{{PLACEHOLDER}}` tokens with your real
-values, then register it on the cadence below.
+in `skills/<name>/SKILL.md`. The fastest way to install one is the CLI, which
+copies the SKILL.md into your scheduled-tasks directory and fills in the
+`{{PLACEHOLDER}}` tokens from your `.env`:
+
+```bash
+atlas skills list                       # every available skill (slug + cadence)
+atlas skills show atlas-daily-report-email   # print a skill's SKILL.md
+atlas skills install atlas-daily-report-email
+```
+
+`install` writes to `$ATLAS_SKILLS_DIR/<name>/SKILL.md` (default
+`$VAULT_PATH/.claude/skills/<name>/`), substitutes every placeholder it can
+resolve from the environment, and tells you which tokens it left for you to fill
+in by hand. Pass `--force` to overwrite an existing install. Then register it on
+the cadence below. (You can still copy the folder manually if you prefer.)
 
 ## Placeholders used across skills
+
+`atlas skills install` resolves each `{{TOKEN}}` from the environment variable of
+the same name (so `{{VAULT_PATH}}` ← `VAULT_PATH`). Two are special-cased:
+`{{ATLAS_OS}}` resolves to this repo's path automatically, and `{{LLM_PORT}}`
+reads `LM_STUDIO_PORT`. Tokens with no value (e.g. `{{JOB_TRACKER_PATH}}`,
+`{{WATCHLIST}}`) are left in place for you to edit.
 
 | Token | Meaning |
 |---|---|

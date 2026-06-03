@@ -25,6 +25,7 @@ set -a; source .env; set +a
 | `VAULT_PATH` | **Yes** (almost everything) | `.` (cwd) | all scripts |
 | `RAG_DIR` | No | `$VAULT_PATH/.rag` | embed, graph, health |
 | `SCHEDULED_DIR` | No | `~/Documents/Claude/Scheduled` | health |
+| `ATLAS_SKILLS_DIR` | No | `$VAULT_PATH/.claude/skills` | `atlas skills install` |
 | `EMBED_HOST` | No | `localhost` | embed, health |
 | `EMBED_PORT` | No | `5555` | embed, health |
 | `EMBED_MODEL` | No | `text-embedding-nomic-embed-text-v1.5` | embed |
@@ -81,6 +82,11 @@ Default: `$VAULT_PATH/.rag`. Read by `embed_vault.py`, `build_graph.py`, and
 Directory holding your installed Claude scheduled-task `SKILL.md` folders.
 Default: `~/Documents/Claude/Scheduled`. Only `health_check.py` reads it (to
 confirm tasks are installed).
+
+### `ATLAS_SKILLS_DIR`
+Where `atlas skills install <name>` writes a skill's `SKILL.md` (under a
+`<name>/` subfolder). Default: `$VAULT_PATH/.claude/skills`. Set this to point
+installs at your real Claude scheduled-tasks directory instead.
 
 ---
 

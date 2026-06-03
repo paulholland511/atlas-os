@@ -234,6 +234,11 @@ uv tool install "git+https://github.com/paulholland511/atlas-os"
 pipx install "git+https://github.com/paulholland511/atlas-os"
 ```
 
+> **Coming to PyPI.** Once Atlas OS is published, the git URL won't be needed —
+> `pipx install atlas-os` (or `uv tool install atlas-os`, `pip install atlas-os`)
+> will be the one-liner. The packaging is already PyPI-ready; see
+> [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the release runbook.
+
 **With optional extras** (trading needs `yfinance`, PDF embedding needs
 `pdfplumber`):
 
@@ -254,7 +259,11 @@ pip install -e ".[trading,pdf]"  # optional extras
 
 > On Python 3.14 the editable console script can be flaky; if `atlas` doesn't
 > resolve, use `python -m atlas_os <command>`, which always works from a
-> checkout.
+> checkout. (On macOS this happens when the checkout lives in an iCloud-synced
+> folder: iCloud sets the `hidden` flag on the editable `.pth`, and Python 3.13+
+> skips hidden `.pth` files. Fix it with
+> `chflags nohidden .venv/lib/python*/site-packages/*.pth`, or keep the venv
+> outside iCloud.)
 
 ### No install at all (run the scripts directly)
 
@@ -372,6 +381,9 @@ underlying script.
 | `atlas init` | Guided onboarding — detect LLM, write `.env`, scaffold vault, generate the skills catalog | `--vault`, `--yes`, `--force` |
 | `atlas doctor` | Validate the setup; OK / WARN / FAIL per subsystem | — |
 | `atlas skills` | List the agent skills catalog | `--sync`, `--output` |
+| `atlas skills list` | List every available skill (slug + cadence) | — |
+| `atlas skills show` | Print a skill's `SKILL.md` | — |
+| `atlas skills install` | Install a skill into the scheduled-tasks dir, filling placeholders | `--force` |
 | `atlas embed` | Build/refresh the RAG index | `--full`, `--incremental`, `--test N`, `--folder NAME`, `--pdfs-only`, `--checkpoint-interval N`, `--batch-size N` |
 | `atlas graph` | Rebuild the wikilink knowledge graph | — |
 | `atlas commit` | Auto-commit the vault with a categorised message | `--dry-run`, `--json` |
@@ -390,6 +402,8 @@ atlas embed --incremental                 # embed only changed notes
 atlas embed --test 5                       # smoke-test the endpoint on 5 files
 atlas changelog --since "7 days ago" --markdown
 atlas commit --dry-run
+atlas skills list                          # every installable skill
+atlas skills install atlas-daily-report-email   # deploy one, filling placeholders
 atlas skills --sync                        # regenerate Skills Catalog.md
 atlas email -s "Hi" -b "<p>Hello</p>" --to me@example.com
 atlas email --json '{"to":"me@example.com","subject":"Hi","body_html":"<p>Hi</p>"}'
@@ -423,6 +437,7 @@ auto-loads `.env`; if you run scripts directly, `set -a; source .env; set +a`.
 | `VAULT_PATH` | **Yes** | `.` | all scripts |
 | `RAG_DIR` | No | `$VAULT_PATH/.rag` | embed, graph, health |
 | `SCHEDULED_DIR` | No | `~/Documents/Claude/Scheduled` | health |
+| `ATLAS_SKILLS_DIR` | No | `$VAULT_PATH/.claude/skills` | `atlas skills install` |
 | `EMBED_HOST` / `EMBED_PORT` | No | `localhost` / `5555` | embed, health |
 | `EMBED_MODEL` | No | `text-embedding-nomic-embed-text-v1.5` | embed |
 | `EMBED_URL` | No | `http://$EMBED_HOST:$EMBED_PORT/v1/embeddings` | embed |
@@ -537,9 +552,10 @@ Both `.rag/` artifacts are **git-ignored** and never leave your machine.
 ## Scheduled tasks & the skills catalog
 
 Automations are **Claude Cowork skills** — a `SKILL.md` prompt per task in
-`skills/<name>/`. To install one, copy its folder into your Claude
-scheduled-tasks directory, replace the `{{PLACEHOLDER}}` tokens, and register it
-on the cadence below.
+`skills/<name>/`. Install one with `atlas skills install <name>` — it copies the
+`SKILL.md` into your scheduled-tasks directory (`$ATLAS_SKILLS_DIR`, default
+`$VAULT_PATH/.claude/skills/`) and substitutes the `{{PLACEHOLDER}}` tokens from
+your `.env`. Then register it on the cadence below.
 
 | Skill | Suggested cadence | What it does |
 |---|---|---|
@@ -561,8 +577,10 @@ agent that reads or searches your vault can discover the full menu of automation
 it can invoke.
 
 ```bash
-atlas skills          # list the catalog in the terminal
-atlas skills --sync   # (re)generate Skills Catalog.md in the vault
+atlas skills              # list the catalog in the terminal
+atlas skills show <name>  # print a skill's SKILL.md
+atlas skills install <name>   # deploy it, filling placeholders from .env
+atlas skills --sync       # (re)generate Skills Catalog.md in the vault
 ```
 
 `atlas init` generates it on first setup. Add your own skill by dropping a
@@ -803,13 +821,12 @@ More: [`docs/FAQ.md`](docs/FAQ.md). For a clean rebuild:
 
 Ideas on the table (contributions welcome):
 
-- **Audit trail** — an append-only `.atlas/audit.jsonl` recording every
-  autonomous action (what ran, when, why, what changed/sent) for trustable
-  autonomy.
-- **`atlas skills install <name>`** — deploy a skill into the scheduled-tasks
-  directory, with placeholder substitution.
-- **PyPI release** — `pipx install atlas-os` without the git URL.
+- **PyPI release** — the packaging is ready ([`docs/PUBLISHING.md`](docs/PUBLISHING.md));
+  once published, `pipx install atlas-os` works without the git URL.
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
+
+Recently shipped: an append-only audit trail, and `atlas skills install` for
+one-command skill deployment with placeholder substitution.
 
 ---
 

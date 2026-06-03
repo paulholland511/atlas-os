@@ -28,9 +28,17 @@ atlas schemas --folder projects
 | `atlas schemas` | `schemas/enforce_schemas.py` |
 
 CLI-only commands (no script equivalent): `atlas init` and `atlas doctor` (see
-[SETUP.md](SETUP.md)), and `atlas skills` — list the agent skills catalog, or
-`atlas skills --sync` to (re)generate the `Skills Catalog.md` note in your vault
-(see [SCHEDULED-TASKS.md](SCHEDULED-TASKS.md#the-skills-catalog-agent-discovery)).
+[SETUP.md](SETUP.md)), and the `atlas skills` family —
+
+- `atlas skills` — list the agent skills catalog (`--sync` (re)generates the
+  `Skills Catalog.md` note in your vault).
+- `atlas skills list` — list every available skill (slug + cadence).
+- `atlas skills show <name>` — print a skill's `SKILL.md`.
+- `atlas skills install <name>` — copy a skill into your scheduled-tasks
+  directory (`$ATLAS_SKILLS_DIR`, default `$VAULT_PATH/.claude/skills/<name>/`),
+  filling `{{PLACEHOLDER}}` tokens from `.env` (`--force` to overwrite).
+
+See [SCHEDULED-TASKS.md](SCHEDULED-TASKS.md#the-skills-catalog-agent-discovery).
 
 To run the scripts **directly** instead, load your env first:
 

@@ -4,16 +4,23 @@ The catalog is a markdown note written into the vault so that agents (and you)
 can discover, at a glance, every automation skill this Atlas OS install ships.
 Each skill's ``name`` and ``description`` are read from its SKILL.md YAML
 frontmatter — the single source of truth — so the catalog never drifts.
+
+This module also handles **installing** a skill into your Claude
+scheduled-tasks directory: copying the SKILL.md across and substituting its
+``{{PLACEHOLDER}}`` tokens with values from the environment (see
+``install_skill``).
 """
 
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-from atlas_os._paths import skills_dir
+from atlas_os._paths import repo_root, skills_dir
 
 # Suggested cadences, keyed by skill name. Mirrors docs/SCHEDULED-TASKS.md.
 # A skill missing here simply shows "—"; nothing breaks.
@@ -101,12 +108,156 @@ suggestions (see the project's `docs/SCHEDULED-TASKS.md`).
 |---|---|---|
 {rows}
 
-_{len(skills)} skill(s). To install one, copy its `skills/<slug>/` folder into
-your Claude scheduled-tasks directory and replace the `{{{{PLACEHOLDER}}}}`
-tokens. See `docs/SCHEDULED-TASKS.md`._
+_{len(skills)} skill(s). To install one, run `atlas skills install <slug>` — it
+copies the SKILL.md into your scheduled-tasks directory and fills the
+`{{{{PLACEHOLDER}}}}` tokens from your `.env`. See `docs/SCHEDULED-TASKS.md`._
 """
 
 
 def default_catalog_path(vault: Path) -> Path:
     """Where the catalog note lives in the vault."""
     return vault / "Skills Catalog.md"
+
+
+def find_skill(slug: str) -> Skill | None:
+    """Return the skill with this folder slug (or matching ``name``), or None."""
+    for skill in load_skills():
+        if skill.slug == slug or skill.name == slug:
+            return skill
+    return None
+
+
+def skill_source(slug: str) -> Path:
+    """Path to a skill's SKILL.md in the repo. Does not check existence."""
+    return skills_dir() / slug / "SKILL.md"
+
+
+# ── Installation ──────────────────────────────────────────────────────────────
+# A skill's SKILL.md carries ``{{PLACEHOLDER}}`` tokens that are filled in at
+# install time from the environment (loaded from .env). Most tokens share their
+# name with the env var; the few that differ are aliased below. ``{{ATLAS_OS}}``
+# resolves to the repo root so installed skills can call ``scripts/*.py``.
+_TOKEN_RE = re.compile(r"\{\{([A-Z_][A-Z0-9_]*)\}\}")
+
+# Token → environment variable, for tokens whose names differ from their var.
+_TOKEN_ALIASES: dict[str, str] = {
+    "LLM_PORT": "LM_STUDIO_PORT",
+}
+
+
+class SkillNotFoundError(LookupError):
+    """Raised when an install/show target is not a known skill."""
+
+
+class SkillInstallError(RuntimeError):
+    """Raised when a skill cannot be installed (no target dir, exists, …)."""
+
+
+@dataclass(frozen=True)
+class InstallResult:
+    """Outcome of installing a skill — what was written and what's left to do."""
+
+    slug: str
+    source: Path
+    dest: Path
+    resolved: dict[str, str]  # token → value substituted
+    unresolved: list[str]  # tokens with no env value, left as {{TOKEN}}
+    overwrote: bool
+
+
+def _resolve_token(token: str, env: dict[str, str]) -> str | None:
+    """Resolve one placeholder token to its value, or None if unset."""
+    if token == "ATLAS_OS":
+        root = repo_root()
+        return str(root) if root is not None else env.get("ATLAS_OS") or None
+    return env.get(_TOKEN_ALIASES.get(token, token)) or None
+
+
+def substitute_placeholders(
+    text: str, env: dict[str, str] | None = None
+) -> tuple[str, dict[str, str], list[str]]:
+    """Replace ``{{TOKEN}}`` placeholders from the environment.
+
+    Returns the rendered text, a ``{token: value}`` map of what was substituted,
+    and an ordered list of tokens that had no value (left untouched as
+    ``{{TOKEN}}`` so you can fill them in by hand).
+    """
+    environ = os.environ if env is None else env
+    resolved: dict[str, str] = {}
+    unresolved: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        token = match.group(1)
+        value = _resolve_token(token, environ)
+        if value is None:
+            if token not in unresolved:
+                unresolved.append(token)
+            return match.group(0)
+        resolved[token] = value
+        return value
+
+    return _TOKEN_RE.sub(_replace, text), resolved, unresolved
+
+
+def skills_install_root(env: dict[str, str] | None = None) -> Path | None:
+    """Base directory skills are installed into.
+
+    ``ATLAS_SKILLS_DIR`` overrides everything; otherwise it's
+    ``$VAULT_PATH/.claude/skills``. Returns None if neither is configured.
+    """
+    environ = os.environ if env is None else env
+    override = environ.get("ATLAS_SKILLS_DIR")
+    if override:
+        return Path(os.path.expanduser(override))
+    vault = environ.get("VAULT_PATH")
+    if not vault:
+        return None
+    return Path(os.path.expanduser(vault)) / ".claude" / "skills"
+
+
+def install_skill(
+    slug: str, *, env: dict[str, str] | None = None, force: bool = False
+) -> InstallResult:
+    """Install a skill into the scheduled-tasks directory, filling placeholders.
+
+    Copies ``skills/<slug>/SKILL.md`` to ``<install root>/<slug>/SKILL.md``,
+    substituting ``{{PLACEHOLDER}}`` tokens from the environment. Raises
+    ``SkillNotFoundError`` for an unknown skill and ``SkillInstallError`` when
+    there's no install root or the target exists (and ``force`` is False).
+    """
+    environ = os.environ if env is None else env
+    skill = find_skill(slug)
+    if skill is None:
+        raise SkillNotFoundError(slug)
+
+    source = skill_source(skill.slug)
+    if not source.is_file():
+        raise SkillNotFoundError(slug)
+
+    root = skills_install_root(environ)
+    if root is None:
+        raise SkillInstallError(
+            "no install target — set ATLAS_SKILLS_DIR or VAULT_PATH (run `atlas init`)"
+        )
+
+    dest = root / skill.slug / "SKILL.md"
+    overwrote = dest.exists()
+    if overwrote and not force:
+        raise SkillInstallError(
+            f"{dest} already exists — pass --force to overwrite"
+        )
+
+    rendered, resolved, unresolved = substitute_placeholders(
+        source.read_text(encoding="utf-8"), environ
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(rendered, encoding="utf-8")
+
+    return InstallResult(
+        slug=skill.slug,
+        source=source,
+        dest=dest,
+        resolved=resolved,
+        unresolved=unresolved,
+        overwrote=overwrote,
+    )

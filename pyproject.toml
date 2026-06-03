@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atlas-os"
-version = "0.3.0"
+dynamic = ["version"]
 description = "A local-first personal AI operating system built on Claude Cowork: knowledge vault, local RAG, git automation, and scheduled agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,8 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Topic :: Office/Business",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Indexing",
   "Topic :: Utilities",
 ]
 dependencies = [
@@ -44,8 +46,33 @@ Changelog = "https://github.com/paulholland511/atlas-os/blob/main/CHANGELOG.md"
 [project.scripts]
 atlas = "atlas_os.cli:app"
 
+# Single-source the version from atlas_os/__init__.py (__version__). Bump it
+# there and both the package and the package metadata stay in lockstep.
+[tool.hatch.version]
+path = "atlas_os/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["atlas_os"]
+
+# The sdist ships the full source tree so a downstream build can reproduce the
+# wheel (which force-includes scripts/, schemas/, templates/, skills/). hatchling
+# reads .gitignore, so build artefacts and secrets are excluded automatically;
+# this just makes the operational dirs explicit. (hatchling does not use a
+# MANIFEST.in — that's a setuptools concept; this block is its equivalent.)
+[tool.hatch.build.targets.sdist]
+include = [
+  "atlas_os",
+  "scripts",
+  "schemas",
+  "templates",
+  "skills",
+  "docs",
+  "tests",
+  "README.md",
+  "CHANGELOG.md",
+  "LICENSE",
+  ".env.example",
+]
 
 # Bundle the scripts, schemas, and templates into the wheel so an installed
 # `atlas` command works without the source checkout. These go into a top-level

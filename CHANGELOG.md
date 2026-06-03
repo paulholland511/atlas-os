@@ -7,6 +7,28 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`atlas skills install <name>`** — one-command skill deployment. Copies a
+  skill's `SKILL.md` into your scheduled-tasks directory (`$ATLAS_SKILLS_DIR`,
+  default `$VAULT_PATH/.claude/skills/<name>/`) and substitutes its
+  `{{PLACEHOLDER}}` tokens from the environment / `.env`. Most tokens map to the
+  env var of the same name (`{{VAULT_PATH}}` ← `VAULT_PATH`); `{{ATLAS_OS}}`
+  resolves to the repo path and `{{LLM_PORT}}` reads `LM_STUDIO_PORT`. Tokens
+  with no value are left in place and reported so you can fill them by hand;
+  `--force` overwrites an existing install. Two companion subcommands:
+  `atlas skills list` (every available skill) and `atlas skills show <name>`
+  (print a skill's `SKILL.md`). The placeholder logic and install live in
+  [`atlas_os/_skills.py`](atlas_os/_skills.py), covered by
+  [`tests/test_skills.py`](tests/test_skills.py).
+- **PyPI release preparation.** The package is now publish-ready: the version is
+  single-sourced from `__version__` in
+  [`atlas_os/__init__.py`](atlas_os/__init__.py) via `[tool.hatch.version]`
+  (bump it in one place), the sdist explicitly bundles `scripts/`, `schemas/`,
+  `templates/`, `skills/`, and `docs/` (`[tool.hatch.build.targets.sdist]`), and
+  the metadata gained AI/indexing topic classifiers. A new
+  [`docs/PUBLISHING.md`](docs/PUBLISHING.md) is the maintainer runbook (bump →
+  `python -m build` → `twine check` → TestPyPI → `twine upload` → tag). No
+  release is published yet — everything is staged so `pipx install atlas-os`
+  works the moment it is.
 - **Pluggable LLM backends** ([`atlas_os/backends.py`](atlas_os/backends.py)).
   Atlas OS now auto-detects any OpenAI-compatible LLM server, probing **LM Studio
   (`:5555`) → Ollama (`:11434`) → llama.cpp (`:8080`) → a custom

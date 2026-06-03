@@ -6,6 +6,7 @@ Subcommands:
                        scaffold the vault, install templates.
 * ``atlas doctor``   — validate the whole setup and report OK / WARN / FAIL.
 * ``atlas backends`` — show detected LLM backends; ``test`` runs an inference.
+* ``atlas skills``   — list/show/install agent skills; ``--sync`` writes the catalog
 * ``atlas embed``    — RAG pipeline           (wraps scripts/embed_vault.py)
 * ``atlas graph``    — knowledge graph        (wraps scripts/build_graph.py)
 * ``atlas commit``   — auto-commit the vault  (wraps scripts/vault_commit.py)
@@ -42,6 +43,7 @@ from dotenv import load_dotenv
 
 from atlas_os import __version__, audit
 from atlas_os import backends as llm_backends
+from atlas_os import _skills
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import detect_endpoints
 from atlas_os._skills import default_catalog_path, load_skills, render_catalog
@@ -318,8 +320,25 @@ def _write_catalog(vault: Path, output: Path | None) -> Path:
     return path
 
 
-@app.command()
-def skills(
+skills_app = typer.Typer(
+    invoke_without_command=True,
+    help="List, show, and install the agent skills shipped with Atlas OS.",
+)
+app.add_typer(skills_app, name="skills")
+
+
+def _print_skill_list(items: list[_skills.Skill]) -> None:
+    """Render the skills catalog to the terminal (slug · cadence · description)."""
+    typer.secho(f"\nAgent skills ({len(items)} skill(s)):\n", bold=True)
+    for s in items:
+        typer.secho(f"  {s.slug}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f"  [{s.cadence}]")
+        typer.echo(f"    {s.description}")
+
+
+@skills_app.callback()
+def skills_main(
+    ctx: typer.Context,
     sync: bool = typer.Option(
         False, "--sync", help="Write/refresh the catalog note in the vault."
     ),
@@ -327,17 +346,20 @@ def skills(
         None, "--output", help="Override the catalog note path (with --sync)."
     ),
 ) -> None:
-    """List the agent skills catalog; ``--sync`` writes it into the vault."""
+    """List the agent skills catalog; ``--sync`` writes it into the vault.
+
+    Run with no subcommand to list every skill. See ``list``, ``show``, and
+    ``install`` for the per-skill operations.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
     items = load_skills()
     if not items:
         _echo_warn("no skills found")
         raise typer.Exit()
 
-    typer.secho(f"\nAgent skills catalog ({len(items)} skill(s)):\n", bold=True)
-    for s in items:
-        typer.secho(f"  {s.name}", fg=typer.colors.CYAN, nl=False)
-        typer.echo(f"  [{s.cadence}]")
-        typer.echo(f"    {s.description}")
+    _print_skill_list(items)
 
     if sync:
         vault = _resolve_vault()
@@ -347,7 +369,70 @@ def skills(
         path = _write_catalog(vault, output)
         _echo_ok(f"wrote catalog → {path}")
     else:
-        typer.echo("\nRun `atlas skills --sync` to write this into your vault.")
+        typer.echo(
+            "\nRun `atlas skills install <name>` to install one, "
+            "or `atlas skills --sync` to write the catalog into your vault."
+        )
+
+
+@skills_app.command("list")
+def skills_list() -> None:
+    """List every available skill from the skills/ directory."""
+    items = load_skills()
+    if not items:
+        _echo_warn("no skills found")
+        raise typer.Exit()
+    _print_skill_list(items)
+    typer.echo("\nRun `atlas skills install <name>` to install one.")
+
+
+@skills_app.command("show")
+def skills_show(name: str = typer.Argument(..., help="Skill slug to display.")) -> None:
+    """Print a skill's SKILL.md content to stdout."""
+    skill = _skills.find_skill(name)
+    if skill is None:
+        _echo_fail(f"unknown skill {name!r} — run `atlas skills list`")
+        raise typer.Exit(code=2)
+    source = _skills.skill_source(skill.slug)
+    if not source.is_file():
+        _echo_fail(f"SKILL.md not found for {skill.slug!r}")
+        raise typer.Exit(code=2)
+    typer.echo(source.read_text(encoding="utf-8"))
+
+
+@skills_app.command("install")
+def skills_install(
+    name: str = typer.Argument(..., help="Skill slug to install."),
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite an already-installed skill."
+    ),
+) -> None:
+    """Install a skill into your scheduled-tasks dir, filling in placeholders.
+
+    The skill's SKILL.md is copied to ``$ATLAS_SKILLS_DIR/<name>/`` (or
+    ``$VAULT_PATH/.claude/skills/<name>/`` by default) with its
+    ``{{PLACEHOLDER}}`` tokens substituted from your environment / .env.
+    """
+    try:
+        result = _skills.install_skill(name, force=force)
+    except _skills.SkillNotFoundError:
+        _echo_fail(f"unknown skill {name!r} — run `atlas skills list`")
+        raise typer.Exit(code=2) from None
+    except _skills.SkillInstallError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    verb = "reinstalled" if result.overwrote else "installed"
+    _echo_ok(f"{verb} {result.slug} → {result.dest}")
+    if result.resolved:
+        filled = ", ".join(sorted(result.resolved))
+        typer.echo(f"  filled {len(result.resolved)} placeholder(s): {filled}")
+    if result.unresolved:
+        left = ", ".join(result.unresolved)
+        _echo_warn(
+            f"{len(result.unresolved)} placeholder(s) left to fill by hand: {left}"
+        )
+        typer.echo(f"  edit them in {result.dest}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

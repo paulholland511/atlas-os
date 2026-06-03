@@ -50,8 +50,6 @@ SCHEDULED_DIR = Path(os.path.expanduser(
     os.environ.get("SCHEDULED_DIR", "~/Documents/Claude/Scheduled")
 ))
 
-EMBED_HOST = os.environ.get("EMBED_HOST", "localhost")
-EMBED_PORT = os.environ.get("EMBED_PORT", "5555")
 TTS_HOST   = os.environ.get("TTS_HOST", "localhost")
 TTS_PORT   = os.environ.get("TTS_PORT", "8800")
 FRONTEND_PORT = os.environ.get("DASHBOARD_FRONTEND_PORT", "3000")
@@ -133,10 +131,52 @@ def check_vault() -> Result:
     return combine("Vault", checks)
 
 
+def _try_import_backends():
+    """Import ``atlas_os.backends`` (adding the repo root to sys.path if needed)."""
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        pass
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "atlas_os" / "__init__.py").exists():
+            sys.path.insert(0, str(parent))
+            break
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        return None
+
+
+def _embeddings_models_url() -> tuple[str, str]:
+    """Resolve ``(models_url, label)`` for the embeddings backend.
+
+    Explicit ``EMBED_*`` env wins; otherwise auto-detect a running backend so the
+    health report reflects whichever of LM Studio / Ollama / llama.cpp is up.
+    """
+    url = os.environ.get("EMBED_URL")
+    if url:
+        base = url.rsplit("/v1/", 1)[0]
+        return f"{base}/v1/models", base.split("://", 1)[-1]
+    host = os.environ.get("EMBED_HOST")
+    port = os.environ.get("EMBED_PORT")
+    if host or port:
+        host = host or "localhost"
+        port = port or "5555"
+        return f"http://{host}:{port}/v1/models", f"{host}:{port}"
+    backends = _try_import_backends()
+    if backends is not None:
+        backend = backends.detect_backend()
+        if backend is not None:
+            return backend.models_url, f"{backend.label} {backend.base_url}"
+    return "http://localhost:5555/v1/models", "localhost:5555"
+
+
 def check_rag() -> Result:
     vectors = RAG_DIR / "vectors.json"
     last_embed = RAG_DIR / "last_embed.txt"
-    lm_url = f"http://{EMBED_HOST}:{EMBED_PORT}/v1/models"
+    lm_url, lm_label = _embeddings_models_url()
     lm_ok, lm_detail = probe_http(lm_url, timeout=3.0)
     p_ok, p_detail = probe_path(vectors)
     if p_ok:
@@ -147,7 +187,7 @@ def check_rag() -> Result:
         [
             ("vectors file", p_ok, p_detail),
             ("last_embed.txt", *probe_path(last_embed, max_age_hours=24 * 7)),
-            (f"embeddings @ {EMBED_HOST}:{EMBED_PORT}", lm_ok, lm_detail),
+            (f"embeddings @ {lm_label}", lm_ok, lm_detail),
         ],
     )
 

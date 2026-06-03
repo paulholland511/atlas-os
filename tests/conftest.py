@@ -31,6 +31,13 @@ import os  # noqa: E402  (import after computing temp paths for clarity)
 os.environ["VAULT_PATH"] = str(_VAULT)
 os.environ["RAG_DIR"] = str(_TMP / "rag")
 
+# Pin the LLM endpoint hosts so scripts resolve their URLs purely from the
+# environment at import time and never probe the network for a live backend
+# (the backend auto-detection in atlas_os.backends only runs when *no* endpoint
+# is configured). These match the historic defaults, so behaviour is unchanged.
+os.environ.setdefault("EMBED_HOST", "localhost")
+os.environ.setdefault("LM_STUDIO_HOST", "localhost")
+
 # ── 2. Make the standalone scripts importable by name ──────────────────────────
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:

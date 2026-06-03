@@ -5,6 +5,7 @@ Subcommands:
 * ``atlas init``     — interactive onboarding: detect your LLM, write .env,
                        scaffold the vault, install templates.
 * ``atlas doctor``   — validate the whole setup and report OK / WARN / FAIL.
+* ``atlas backends`` — show detected LLM backends; ``test`` runs an inference.
 * ``atlas embed``    — RAG pipeline           (wraps scripts/embed_vault.py)
 * ``atlas graph``    — knowledge graph        (wraps scripts/build_graph.py)
 * ``atlas commit``   — auto-commit the vault  (wraps scripts/vault_commit.py)
@@ -40,6 +41,7 @@ import typer
 from dotenv import load_dotenv
 
 from atlas_os import __version__, audit
+from atlas_os import backends as llm_backends
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import detect_endpoints
 from atlas_os._skills import default_catalog_path, load_skills, render_catalog
@@ -637,6 +639,84 @@ def audit_export(
         _echo_ok(f"exported {len(entries)} entr(y/ies) → {output}")
     else:
         typer.echo(text)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# backends — pluggable LLM backend detection
+# ─────────────────────────────────────────────────────────────────────────────
+def _backends_list() -> None:
+    """Probe every configured backend and print a status report."""
+    try:
+        forced = llm_backends.forced_backend_name()
+    except llm_backends.BackendError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=2) from exc
+
+    statuses = llm_backends.backend_statuses()
+    typer.secho("\nLLM backends\n", bold=True)
+    if forced is not None:
+        typer.echo(f"  forced via {llm_backends.FORCE_BACKEND_ENV}={forced}\n")
+
+    active: str | None = forced
+    if active is None:
+        active = next((s.backend.name for s in statuses if s.reachable), None)
+
+    for status in statuses:
+        be = status.backend
+        marker = "→" if be.name == active else " "
+        if status.reachable:
+            models = ", ".join(status.models[:4]) or "no models reported"
+            _echo_ok(f"{marker} {be.label:<18} {be.base_url}  ({models})")
+        else:
+            _echo_warn(f"{marker} {be.label:<18} {be.base_url}  unreachable: {status.error}")
+
+    typer.echo("")
+    if active is None:
+        _echo_warn("no backend reachable — start one, or set ATLAS_LLM_BACKEND + *_URL")
+        typer.echo("Run `atlas backends test` once one is up to verify inference.")
+    else:
+        typer.secho(f"active backend: {active}", bold=True)
+        typer.echo("Run `atlas backends test` to verify inference end-to-end.")
+
+
+def _backends_test() -> None:
+    """Run a one-shot inference against the active (or forced) backend."""
+    try:
+        client = llm_backends.get_client()
+    except llm_backends.BackendUnavailable as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+    except llm_backends.BackendError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=2) from exc
+
+    be = client.backend
+    typer.secho(f"\nTesting {be.label} at {be.base_url}", bold=True)
+    typer.echo(f"  model: {client.model}")
+    typer.echo("  sending a one-line chat completion…\n")
+
+    result = llm_backends.run_inference(client)
+    if result.ok:
+        _echo_ok(f"inference OK — model replied: {result.content!r}")
+    else:
+        _echo_fail(f"inference failed: {result.error}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def backends(
+    action: str = typer.Argument(
+        None, help="Omit to list backends; pass 'test' to run an inference test."
+    ),
+) -> None:
+    """Show detected LLM backends; ``atlas backends test`` runs an inference."""
+    if action is None or action == "list":
+        _backends_list()
+    elif action == "test":
+        _backends_test()
+    else:
+        _echo_fail(f"unknown action {action!r} — use nothing (list) or 'test'")
+        raise typer.Exit(code=2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

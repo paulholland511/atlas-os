@@ -36,6 +36,12 @@ the source — see [**features/**](features/README.md):
 - [**SCHEDULED-TASKS.md**](SCHEDULED-TASKS.md) — the Claude Cowork skills, their
   cadences, the placeholder tokens, and the in-vault **skills catalog** agents
   use for discovery.
+- [**SKILLS-CATALOGUE.md**](SKILLS-CATALOGUE.md) — the full menu of **160+ skills**
+  (149 capability skills across 7 domains, plus the Atlas-native and scheduled
+  automations) that agents can draw on.
+- [**SKILLS-FRAMEWORK.md**](SKILLS-FRAMEWORK.md) — what a skill is, the lifecycle
+  (creation → installation → scheduling → execution → audit logging), how skills
+  reach sub-agents, and a copy-paste `SKILL.md` template for authoring your own.
 - [**REBUILD.md**](REBUILD.md) — disaster-recovery / clean-install runbook.
 
 ## Design & data

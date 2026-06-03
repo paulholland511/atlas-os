@@ -116,7 +116,11 @@ A single `atlas init` wires Claude into a coherent system:
   fire on a cadence and do real work while you're away.
 - **Multi-agent orchestration** — a self-updating skills catalog and a
   dependency-light multi-agent research framework, so agents can discover and
-  invoke every automation you've configured.
+  invoke every automation you've configured. A
+  [**catalogue of 160+ skills**](docs/SKILLS-CATALOGUE.md) (149 capability skills
+  across 7 domains, plus the Atlas-native and scheduled automations) documents
+  the full menu, and the [**skills framework**](docs/SKILLS-FRAMEWORK.md) shows
+  how to author your own.
 - **Local LLM integration** — embeddings and inference run against your own
   LM Studio / Ollama / llama.cpp endpoint by default; nothing leaves the box
   unless you wire it up yourself.
@@ -152,29 +156,33 @@ with your notes* and *running an operating system over them*.
 
 ## Features
 
-Nine composable systems, each usable on its own:
+Ten composable systems, each usable on its own:
 
 1. **Knowledge vault** — a folder of markdown notes (Obsidian-friendly) where
    top-level folders carry meaning and per-folder YAML frontmatter is kept
    consistent automatically. See [the vault](#the-knowledge-vault).
 2. **Local RAG search** — chunk + embed your notes via a local LLM into a hybrid
    (vector + keyword) index stored in `.rag/vectors.json`.
-3. **Knowledge graph** — a wikilink (`[[note]]`) graph with nodes, edges,
+3. **Pluggable LLM backends** — bring whatever OpenAI-compatible server you run.
+   Atlas OS auto-detects LM Studio, Ollama, llama.cpp, or any custom endpoint
+   (probed in that order), with `ATLAS_LLM_BACKEND` to force one. Inspect with
+   `atlas backends` / `atlas backends test`.
+4. **Knowledge graph** — a wikilink (`[[note]]`) graph with nodes, edges,
    adjacency, and backlinks for "related notes".
-4. **Git automation** — auto-commit the vault with messages categorised by which
+5. **Git automation** — auto-commit the vault with messages categorised by which
    folders changed, and generate changelogs for a morning briefing.
-5. **Scheduled tasks & skills catalog** — nightly indexing, daily reports,
+6. **Scheduled tasks & skills catalog** — nightly indexing, daily reports,
    weekly health checks and more, as Claude Cowork skills — plus a self-updating
    `Skills Catalog.md` in the vault so agents can discover every automation they
    can invoke.
-6. **Email reports** — a credential-free SMTP sender for status reports and
+7. **Email reports** — a credential-free SMTP sender for status reports and
    newsletters (password from the environment, never hardcoded).
-7. **Trading research SDK** *(optional)* — a dependency-light multi-agent
+8. **Trading research SDK** *(optional)* — a dependency-light multi-agent
    market-research framework that writes briefings into your vault.
    *Not financial advice.*
-8. **Voice / TTS hooks & dashboard** *(optional)* — health-check probes for a
+9. **Voice / TTS hooks & dashboard** *(optional)* — health-check probes for a
    local TTS service, plus a static, single-file operations dashboard.
-9. **Audit trail** — an append-only JSONL log of every autonomous action (what
+10. **Audit trail** — an append-only JSONL log of every autonomous action (what
    ran, how it was triggered, the outcome, duration, and what changed), with
    `atlas audit show / tail / export` for inspection and CSV compliance reports.
 
@@ -557,6 +565,15 @@ atlas skills --sync   # (re)generate Skills Catalog.md in the vault
 `atlas skills --sync`. Cadences, placeholder tokens, and safety notes:
 [`docs/SCHEDULED-TASKS.md`](docs/SCHEDULED-TASKS.md).
 
+**The full skills menu.** Beyond the scheduled tasks above, Atlas OS documents a
+[**catalogue of 160+ skills**](docs/SKILLS-CATALOGUE.md) — 149 capability skills
+across Security, DevOps, Frontend, Backend, Quality, Data & AI, and Business, plus
+the four Atlas-native skills (`autoresearch`, `save-to-vault`, `wiki-search`,
+`send-email`) and the nine scheduled automations. The
+[**skills framework**](docs/SKILLS-FRAMEWORK.md) explains what a skill is, the
+lifecycle (creation → installation → scheduling → execution → audit logging), and
+how to author your own — with a copy-paste `SKILL.md` template.
+
 ---
 
 ## Trading research SDK (optional)
@@ -722,7 +739,7 @@ atlas-os/
 ├── scripts/         embed · graph · commit · changelog · email · health · trade
 ├── tests/           pytest suite (scripts + CLI; hermetic, no network)
 ├── .github/         CI workflow (ruff · pytest · pip-audit) + issue/PR templates
-├── skills/          9 scheduled-task SKILL.md prompts (templated)
+├── skills/          15 SKILL.md prompts (9 scheduled tasks + 6 example skills, templated)
 ├── schemas/         frontmatter schema enforcement + docs
 ├── templates/       CLAUDE.md, memory structure, vault skeleton, ops dashboard
 ├── trading/         optional multi-agent research SDK
@@ -749,6 +766,9 @@ Full docs live in [`docs/`](docs/README.md):
 - [**Script & CLI reference**](docs/SCRIPTS.md) — every command and flag.
 - [Scheduled tasks](docs/SCHEDULED-TASKS.md) — the skills, cadences, placeholders,
   and the skills catalog.
+- [**Skills catalogue**](docs/SKILLS-CATALOGUE.md) — the full 160+ skill menu by
+  domain · [**Skills framework**](docs/SKILLS-FRAMEWORK.md) — anatomy, lifecycle,
+  and authoring your own.
 - [Architecture](docs/ARCHITECTURE.md) · [Rebuild runbook](docs/REBUILD.md) ·
   [Data classification](docs/DATA-CLASSIFICATION.md) · [FAQ](docs/FAQ.md)
 - [Frontmatter schemas](schemas/frontmatter-schemas.md) ·

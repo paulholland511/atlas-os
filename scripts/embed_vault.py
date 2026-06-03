@@ -52,11 +52,64 @@ VECTORS_FILE    = RAG_DIR / "vectors.json"
 LAST_EMBED      = RAG_DIR / "last_embed.txt"
 CHECKPOINT_FILE = RAG_DIR / "embed_checkpoint.json"
 
-EMBED_HOST  = os.environ.get("EMBED_HOST", "localhost")
-EMBED_PORT  = os.environ.get("EMBED_PORT", "5555")
-EMBED_URL   = os.environ.get("EMBED_URL", f"http://{EMBED_HOST}:{EMBED_PORT}/v1/embeddings")
-EMBED_MODEL = os.environ.get("EMBED_MODEL", "text-embedding-nomic-embed-text-v1.5")
-API_KEY     = os.environ.get("EMBED_API_KEY", "")
+API_KEY = os.environ.get("EMBED_API_KEY", "")
+
+
+def _try_import_backends():
+    """Import ``atlas_os.backends``, adding the repo root to sys.path if needed.
+
+    This script runs standalone (``python3 embed_vault.py``), so the package
+    isn't necessarily importable. Returns the module, or ``None`` if unavailable.
+    """
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        pass
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "atlas_os" / "__init__.py").exists():
+            sys.path.insert(0, str(parent))
+            break
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        return None
+
+
+def _resolve_embeddings() -> tuple[str, str]:
+    """Resolve ``(embeddings_url, model)``.
+
+    Explicit ``EMBED_*`` env vars always win, so existing setups are unaffected.
+    Only when no embeddings endpoint is configured do we ask
+    :mod:`atlas_os.backends` to auto-detect a running backend (LM Studio,
+    Ollama, llama.cpp, …) — that's the one path that touches the network.
+    """
+    url = os.environ.get("EMBED_URL")
+    model = os.environ.get("EMBED_MODEL")
+    host = os.environ.get("EMBED_HOST")
+    port = os.environ.get("EMBED_PORT")
+
+    if not url and (host or port):
+        url = f"http://{host or 'localhost'}:{port or '5555'}/v1/embeddings"
+
+    if not url:
+        backends = _try_import_backends()
+        if backends is not None:
+            try:
+                client = backends.get_client()
+                url = client.embeddings_url
+                model = model or client.embed_model
+            except backends.BackendError:
+                pass
+
+    return (
+        url or "http://localhost:5555/v1/embeddings",
+        model or "text-embedding-nomic-embed-text-v1.5",
+    )
+
+
+EMBED_URL, EMBED_MODEL = _resolve_embeddings()
 
 SKIP_DIRS = {".obsidian", ".git", ".rag", ".claude"}
 

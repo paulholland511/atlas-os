@@ -54,10 +54,53 @@ except ImportError as e:
     sys.exit(1)
 
 # Configuration (all from environment)
-LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "localhost")
-LM_STUDIO_PORT = os.environ.get("LM_STUDIO_PORT", "5555")
-LM_STUDIO_URL = os.environ.get("LM_STUDIO_URL", f"http://{LM_STUDIO_HOST}:{LM_STUDIO_PORT}/v1")
-LM_STUDIO_MODEL = os.environ.get("LM_STUDIO_MODEL", "local-model")
+def _try_import_backends():
+    """Import ``atlas_os.backends`` (adding the repo root to sys.path if needed)."""
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        pass
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "atlas_os" / "__init__.py").exists():
+            sys.path.insert(0, str(parent))
+            break
+    try:
+        from atlas_os import backends
+        return backends
+    except ImportError:
+        return None
+
+
+def _resolve_chat() -> tuple[str, str]:
+    """Resolve ``(api_base_url_with_v1, model)`` for the chat endpoint.
+
+    ``LM_STUDIO_URL`` (or ``LM_STUDIO_HOST`` + ``LM_STUDIO_PORT``) still works
+    exactly as before. When none is set we auto-detect a backend via
+    :mod:`atlas_os.backends`; ``ATLAS_LLM_MODEL`` overrides the model name.
+    """
+    url = os.environ.get("LM_STUDIO_URL")
+    host = os.environ.get("LM_STUDIO_HOST")
+    port = os.environ.get("LM_STUDIO_PORT")
+    model = os.environ.get("LM_STUDIO_MODEL") or os.environ.get("ATLAS_LLM_MODEL")
+
+    if not url and (host or port):
+        url = f"http://{host or 'localhost'}:{port or '5555'}/v1"
+
+    if not url:
+        backends = _try_import_backends()
+        if backends is not None:
+            try:
+                client = backends.get_client()
+                url = client.api_base
+                model = model or client.model
+            except backends.BackendError:
+                pass
+
+    return url or "http://localhost:5555/v1", model or "local-model"
+
+
+LM_STUDIO_URL, LM_STUDIO_MODEL = _resolve_chat()
 
 VAULT_PATH = Path(os.path.expanduser(os.environ.get("VAULT_PATH", "."))).resolve()
 OUTPUT_DIR = VAULT_PATH / "wiki" / "sources"

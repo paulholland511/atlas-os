@@ -33,42 +33,43 @@ pip install -e .                   # the `atlas` command
 
 ---
 
-## 3. Configure 3 essential values (1 min)
+## 3. Run the setup wizard (1 min)
+
+One command does everything — no hand-editing `.env` required:
 
 ```bash
-cp .env.example .env
+atlas init
 ```
 
-Open `.env` and set just these three — leave everything else at its default:
+The interactive wizard walks you through the whole setup:
 
-```bash
-VAULT_PATH=~/Documents/Obsidian/MyVault   # where your notes live (or will)
-USER_EMAIL=you@example.com                # where reports get sent
-SMTP_APP_PASSWORD=your-gmail-app-password # 16-char Gmail app password
-```
+1. **Finds your vault** — offers a smart default (an existing
+   `~/Documents/Obsidian/*` folder, `~/vault`, or the current directory) that
+   you can accept or override.
+2. **Auto-detects your LLM** — probes the common local ports (LM Studio `:5555`,
+   Ollama `:11434`, llama.cpp `:8080`) and wires up whichever is running. None
+   running? No problem — RAG just stays off until you start one.
+3. **Asks about email** (optional) — SMTP settings for report delivery; skip it
+   and everything else still works.
+4. **Generates `.env`** from your answers (git-ignored — secrets never get
+   committed).
+5. **Scaffolds the vault** — creates the directory tree (`.atlas/`, `.rag/`,
+   `wiki/`), the index files (`.claude-index.md`, `wiki/index.md`, `wiki/hot.md`,
+   `Operations Dashboard.md`), the skills catalog, and git-inits the vault.
+6. **Runs `atlas doctor`** automatically and prints a "you're ready" summary.
 
-> Don't have a Gmail app password yet? Skip `SMTP_APP_PASSWORD` for now — email
-> is the only feature that needs it, and the rest works without it. When you're
-> ready, [`EXAMPLES.md`](EXAMPLES.md#smtp-setup-gmail-app-password) walks you
-> through it.
+Prefer to skip every prompt? `atlas init --yes` accepts all the smart defaults
+for a fully non-interactive run (handy for scripts and fresh containers). Add
+`--vault PATH` to set the vault explicitly, or `--force` to overwrite an existing
+`.env`.
 
-`.env` is git-ignored — your secrets never get committed.
+> Want email reports? You'll need a 16-char Gmail app password — the wizard asks
+> for it, or you can add it to `.env` later.
+> [`EXAMPLES.md`](EXAMPLES.md#smtp-setup-gmail-app-password) walks you through it.
 
 ---
 
-## 4. Run setup (1 min)
-
-```bash
-atlas init --yes    # scaffold the vault skeleton + git-init it
-```
-
-This creates your vault's index files (`.claude-index.md`, `wiki/index.md`,
-`wiki/hot.md`, `Operations Dashboard.md`), generates the skills catalog, and
-makes the first git commit of your vault.
-
----
-
-## 5. Create your first scheduled task (1 min)
+## 4. Create your first scheduled task (1 min)
 
 The simplest useful automation is a **daily vault backup** — commit every change
 to your vault's git history. Run it manually first to see it work:
@@ -83,7 +84,10 @@ step-by-step version: [`EXAMPLES.md`](EXAMPLES.md#first-scheduled-task-daily-vau
 
 ---
 
-## 6. Verify it works (30 sec)
+## 5. Re-check anytime with the doctor (30 sec)
+
+The wizard already ran this for you at the end of `atlas init`, but you can
+re-run it whenever you change your config:
 
 ```bash
 atlas doctor      # OK / WARN / FAIL per subsystem

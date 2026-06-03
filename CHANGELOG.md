@@ -7,6 +7,27 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Interactive `atlas init` wizard.** First-run onboarding is now a guided,
+  colourful wizard rather than hand-editing `.env`. It opens with a short
+  explanation of what Atlas OS is, then: (1) suggests a **smart vault default**
+  — an existing `~/Documents/Obsidian/*` folder, `~/vault`, or the current
+  directory if it looks like a vault; (2) **auto-detects a local LLM** by probing
+  LM Studio (`:5555`), Ollama (`:11434`), and llama.cpp (`:8080`), wiring the
+  first match's host/port and embedding model into the config; (3) optionally
+  collects **SMTP** settings for email reports; (4) **generates `.env`** from the
+  answers; (5) **scaffolds the vault tree** (`.atlas/`, `.rag/`, `wiki/`) plus
+  the index files and skills catalog, and git-inits the vault; (6) runs
+  **`atlas doctor`** automatically and prints a "you're ready" summary with next
+  steps. `--yes` accepts every default for a fully non-interactive run (fresh
+  machines, scripts, containers), `--vault PATH` sets the vault explicitly, and
+  `--force` overwrites an existing `.env`. The `doctor` checks were extracted
+  into a reusable `_doctor_results()` so the wizard and the standalone command
+  share one source of truth. Endpoint probing
+  ([`atlas_os/_probe.py`](atlas_os/_probe.py)) was realigned to the documented
+  default ports and now de-duplicates a server that answers on more than one API
+  path. Covered by new tests in
+  [`tests/test_cli.py`](tests/test_cli.py); the
+  [Quick Start](docs/QUICKSTART.md) leads with the wizard.
 - **Automated PyPI publishing via GitHub Actions + Trusted Publishing.** Pushing
   a `v*` tag (e.g. `v0.4.0`) now builds, tests, and publishes the release to
   PyPI with no stored token — authentication is

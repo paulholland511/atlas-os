@@ -45,7 +45,7 @@ from atlas_os import __version__, audit
 from atlas_os import backends as llm_backends
 from atlas_os import _skills
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
-from atlas_os._probe import detect_endpoints
+from atlas_os._probe import Endpoint, detect_endpoints
 from atlas_os._skills import default_catalog_path, load_skills, render_catalog
 
 # ── Auto-load .env (repo root first, then cwd, which wins) ────────────────────
@@ -472,10 +472,71 @@ USER_EMAIL={g("USER_EMAIL", "")}
 """
 
 
+# Directories every Atlas OS vault needs, created up front by the wizard so the
+# RAG store, audit trail, and wiki all have a home before anything writes to them.
+_VAULT_DIRS: tuple[str, ...] = (".atlas", ".rag", "wiki")
+
+
+def _detect_default_vault() -> str:
+    """Best guess at where the user's vault lives, for the wizard's default.
+
+    Resolution order:
+
+    1. ``VAULT_PATH`` from the environment / an existing ``.env`` (explicit wins).
+    2. The first sub-folder of ``~/Documents/Obsidian`` (the standard Obsidian
+       home — most people have exactly one vault there).
+    3. ``~/vault`` if it exists.
+    4. The current directory, if it already looks like a vault (contains
+       markdown files) and isn't the Atlas OS source checkout.
+    5. A sensible placeholder under the Obsidian directory.
+    """
+    env = os.environ.get("VAULT_PATH")
+    if env:
+        return os.path.expanduser(env)
+
+    home = Path.home()
+    obsidian = home / "Documents" / "Obsidian"
+    if obsidian.is_dir():
+        subdirs = sorted(
+            p for p in obsidian.iterdir() if p.is_dir() and not p.name.startswith(".")
+        )
+        if subdirs:
+            return str(subdirs[0])
+
+    vault = home / "vault"
+    if vault.is_dir():
+        return str(vault)
+
+    cwd = Path.cwd()
+    if cwd != repo_root() and any(cwd.glob("*.md")):
+        return str(cwd)
+
+    return str(obsidian / "MyVault")
+
+
+def _backend_env_from_endpoint(endpoint: Endpoint) -> dict[str, str]:
+    """Map a detected :class:`_probe.Endpoint` to the .env keys it configures."""
+    values: dict[str, str] = {
+        "EMBED_HOST": endpoint.host,
+        "EMBED_PORT": str(endpoint.port),
+        "LM_STUDIO_HOST": endpoint.host,
+        "LM_STUDIO_PORT": str(endpoint.port),
+    }
+    embed_models = [m for m in endpoint.models if "embed" in m.lower()]
+    if embed_models:
+        values["EMBED_MODEL"] = embed_models[0]
+    return values
+
+
 def _scaffold_vault(vault: Path) -> None:
-    """Copy the vault skeleton, stripping .template suffixes."""
+    """Create the vault directory tree and copy the skeleton (stripping .template)."""
+    for name in _VAULT_DIRS:
+        directory = vault / name
+        created = not directory.exists()
+        directory.mkdir(parents=True, exist_ok=True)
+        if created:
+            _echo_ok(f"created {name}/")
     skel = templates_dir() / "vault-skeleton"
-    (vault / "wiki").mkdir(parents=True, exist_ok=True)
     for src in skel.rglob("*"):
         if src.is_dir():
             continue
@@ -504,6 +565,70 @@ def _git_init(vault: Path) -> None:
         _echo_warn(f"could not init git in vault ({exc}); do it manually")
 
 
+def _print_welcome() -> None:
+    """Friendly banner explaining what `atlas init` is about to do."""
+    typer.secho("\n  ⛰  Atlas OS — setup wizard\n", fg=typer.colors.CYAN, bold=True)
+    typer.echo(
+        "  Atlas OS is your local-first personal AI operating system: a"
+        " searchable\n  markdown vault with git history, RAG semantic search over"
+        " your notes,\n  and a library of automated agent skills — all running"
+        " on your machine.\n"
+    )
+    typer.echo("  This wizard will:")
+    typer.echo("    • find your vault and any local LLM you're running")
+    typer.echo("    • write a .env you can tweak later")
+    typer.echo("    • scaffold the vault structure (.atlas/, .rag/, wiki/)")
+    typer.echo("    • run `atlas doctor` to confirm everything works\n")
+
+
+def _prompt_vault_path(vault: Path | None, yes: bool) -> Path:
+    """Resolve the vault path from the flag, a prompt, or the smart default."""
+    default_vault = _detect_default_vault()
+    if vault is not None:
+        return vault.expanduser().resolve()
+    if yes:
+        return Path(default_vault).expanduser().resolve()
+    return (
+        Path(typer.prompt("  Vault path", default=default_vault))
+        .expanduser()
+        .resolve()
+    )
+
+
+def _detect_backend(values: dict[str, str]) -> None:
+    """Probe for a local LLM and fold any match's host/port/model into ``values``."""
+    typer.echo("\n  Probing for a local LLM endpoint…")
+    typer.secho(
+        "    (LM Studio :5555 · Ollama :11434 · llama.cpp :8080)",
+        fg=typer.colors.BRIGHT_BLACK,
+    )
+    endpoints = detect_endpoints()
+    if not endpoints:
+        _echo_warn("no local LLM found — RAG/trading stay off until you set one up")
+        return
+    for ep in endpoints:
+        models = ", ".join(ep.models[:3]) or "no models reported"
+        _echo_ok(f"{ep.label} at {ep.base_url} ({models})")
+    chosen = endpoints[0]
+    values.update(_backend_env_from_endpoint(chosen))
+    _echo_ok(f"using {chosen.base_url} for embeddings + chat")
+
+
+def _prompt_email(values: dict[str, str], yes: bool) -> None:
+    """Optionally collect SMTP settings for email reports (interactive only)."""
+    if yes or not typer.confirm("\n  Configure email reports now?", default=False):
+        return
+    values["SENDER_EMAIL"] = typer.prompt("  Sender email")
+    values["SMTP_SERVER"] = typer.prompt("  SMTP server", default="smtp.gmail.com")
+    values["SMTP_PORT"] = typer.prompt("  SMTP port", default="587")
+    values["SMTP_APP_PASSWORD"] = typer.prompt(
+        "  SMTP app password", hide_input=True, default=""
+    )
+    values["USER_EMAIL"] = typer.prompt(
+        "  Send reports to", default=values.get("SENDER_EMAIL", "")
+    )
+
+
 @app.command()
 def init(
     vault: Path = typer.Option(
@@ -516,54 +641,24 @@ def init(
         False, "--force", help="Overwrite an existing .env."
     ),
 ) -> None:
-    """Guided onboarding: detect your LLM, write .env, scaffold the vault."""
-    typer.secho("\nAtlas OS — setup\n", bold=True)
+    """Interactive onboarding: detect your LLM, write .env, scaffold the vault.
+
+    Walks a fresh machine from nothing to a working setup — finds your vault and
+    local LLM, generates a ``.env``, builds the vault directory tree, and runs
+    ``atlas doctor`` to confirm it all works. ``--yes`` accepts every default for
+    a fully non-interactive run.
+    """
+    _print_welcome()
 
     # 1. Vault path
-    default_vault = os.path.expanduser(
-        os.environ.get("VAULT_PATH", "~/Documents/Obsidian/MyVault")
-    )
-    if vault is not None:
-        vault_path = vault.expanduser().resolve()
-    elif yes:
-        vault_path = Path(default_vault).resolve()
-    else:
-        vault_path = Path(
-            typer.prompt("Vault path", default=default_vault)
-        ).expanduser().resolve()
-
+    vault_path = _prompt_vault_path(vault, yes)
     values: dict[str, str] = {"VAULT_PATH": str(vault_path)}
 
-    # 2. Detect a local LLM
-    typer.echo("\nProbing for a local LLM endpoint…")
-    endpoints = detect_endpoints()
-    if endpoints:
-        for ep in endpoints:
-            models = ", ".join(ep.models[:3]) or "no models reported"
-            _echo_ok(f"{ep.label} at {ep.base_url} ({models})")
-        chosen = endpoints[0]
-        values["EMBED_HOST"] = chosen.host
-        values["EMBED_PORT"] = str(chosen.port)
-        values["LM_STUDIO_HOST"] = chosen.host
-        values["LM_STUDIO_PORT"] = str(chosen.port)
-        embed_models = [m for m in chosen.models if "embed" in m.lower()]
-        if embed_models:
-            values["EMBED_MODEL"] = embed_models[0]
-        _echo_ok(f"using {chosen.base_url} for embeddings + chat")
-    else:
-        _echo_warn("no local LLM found — RAG/trading stay off until you set one up")
+    # 2. Detect a local LLM backend
+    _detect_backend(values)
 
-    # 3. Email (optional)
-    if not yes and typer.confirm("\nConfigure email reports now?", default=False):
-        values["SENDER_EMAIL"] = typer.prompt("Sender email")
-        values["SMTP_SERVER"] = typer.prompt("SMTP server", default="smtp.gmail.com")
-        values["SMTP_PORT"] = typer.prompt("SMTP port", default="587")
-        values["SMTP_APP_PASSWORD"] = typer.prompt(
-            "SMTP app password", hide_input=True, default=""
-        )
-        values["USER_EMAIL"] = typer.prompt(
-            "Send reports to", default=values.get("SENDER_EMAIL", "")
-        )
+    # 3. Email (optional, interactive only)
+    _prompt_email(values, yes)
 
     # 4. Write .env
     env_dir = repo_root() or Path.cwd()
@@ -573,9 +668,12 @@ def init(
     else:
         env_path.write_text(_render_env(values), encoding="utf-8")
         _echo_ok(f"wrote {env_path}")
+    # Reflect the collected config in this process so the doctor run below (and
+    # any same-session command) sees it without re-reading the freshly written file.
+    os.environ.update(values)
 
     # 5. Scaffold the vault
-    typer.echo("\nScaffolding the vault skeleton…")
+    typer.echo("\n  Scaffolding the vault…")
     _scaffold_vault(vault_path)
     try:
         catalog = _write_catalog(vault_path, None)
@@ -584,20 +682,35 @@ def init(
         _echo_warn(f"could not generate the skills catalog ({exc})")
     _git_init(vault_path)
 
-    # 6. CLAUDE.md (opt-in)
+    # 6. CLAUDE.md (opt-in, interactive only)
     home_claude = Path.home() / "CLAUDE.md"
     if not yes and not home_claude.exists() and typer.confirm(
-        f"\nInstall the CLAUDE.md template to {home_claude}?", default=False
+        f"\n  Install the CLAUDE.md template to {home_claude}?", default=False
     ):
         shutil.copyfile(templates_dir() / "CLAUDE.md.template", home_claude)
         _echo_ok(f"wrote {home_claude} (edit the placeholders)")
 
-    # 7. Next steps
-    typer.secho("\nDone. Next steps:", bold=True)
-    typer.echo("  1. Review your .env            (docs/CONFIGURATION.md)")
-    typer.echo("  2. atlas doctor                 # verify the setup")
-    typer.echo("  3. atlas embed --full           # build the RAG index (needs an LLM)")
-    typer.echo("  4. atlas health                 # full subsystem report\n")
+    # 7. Verify the setup with the doctor
+    typer.secho("\n  Verifying your setup…", bold=True)
+    results = _doctor_results()
+    _render_doctor(results)
+    fails = sum(1 for _, status, _ in results if status == "FAIL")
+
+    # 8. You're ready
+    if fails:
+        typer.secho(
+            "\n  ⚠  Setup finished with issues — fix the FAILs above, "
+            "then re-run `atlas doctor`.\n",
+            fg=typer.colors.YELLOW,
+            bold=True,
+        )
+    else:
+        typer.secho("\n  ✓ You're ready!\n", fg=typer.colors.GREEN, bold=True)
+    typer.echo("  Next steps:")
+    typer.echo("    1. Review your .env             (docs/CONFIGURATION.md)")
+    typer.echo("    2. atlas embed --full           # build the RAG index (needs an LLM)")
+    typer.echo("    3. atlas skills list            # browse the agent skills")
+    typer.echo("    4. atlas health                 # full subsystem report\n")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -821,10 +934,13 @@ def _check_embeddings() -> tuple[str, str]:
     return "WARN", f"{probe} returned HTTP {resp.status_code}"
 
 
-@app.command()
-def doctor() -> None:
-    """Validate the Atlas OS setup and report OK / WARN / FAIL."""
-    typer.secho("\nAtlas OS — doctor\n", bold=True)
+def _doctor_results() -> list[tuple[str, str, str]]:
+    """Run every health check and return ``(name, status, detail)`` rows.
+
+    Pure inspection — no printing, no process exit — so both ``atlas doctor`` and
+    the ``atlas init`` verification step can share it. ``status`` is one of
+    ``"OK"`` / ``"WARN"`` / ``"FAIL"``.
+    """
     results: list[tuple[str, str, str]] = []
 
     # Python
@@ -866,7 +982,11 @@ def doctor() -> None:
         "configured" if has_email else "not configured (reports won't send)",
     ))
 
-    # Render
+    return results
+
+
+def _render_doctor(results: list[tuple[str, str, str]]) -> None:
+    """Print the doctor rows and a one-line OK/WARN/FAIL summary."""
     for name, status, detail in results:
         line = f"{name:<14} {detail}"
         if status == "OK":
@@ -881,7 +1001,15 @@ def doctor() -> None:
     typer.echo("")
     summary = f"{len(results) - fails - warns} OK · {warns} WARN · {fails} FAIL"
     typer.secho(summary, bold=True)
-    if fails:
+
+
+@app.command()
+def doctor() -> None:
+    """Validate the Atlas OS setup and report OK / WARN / FAIL."""
+    typer.secho("\nAtlas OS — doctor\n", bold=True)
+    results = _doctor_results()
+    _render_doctor(results)
+    if any(status == "FAIL" for _, status, _ in results):
         raise typer.Exit(code=1)
 
 

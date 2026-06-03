@@ -16,11 +16,15 @@ Usage:
     python3 build_graph.py
 """
 
-import json
 import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import fileio, scriptkit  # noqa: E402
 
 VAULT_DIR = Path(os.path.expanduser(os.environ.get("VAULT_PATH", "."))).resolve()
 RAG_DIR = Path(os.path.expanduser(os.environ.get("RAG_DIR", str(VAULT_DIR / ".rag"))))
@@ -124,10 +128,7 @@ def build_graph() -> tuple[dict, dict]:
 
 
 def save_graph(graph: dict) -> None:
-    tmp = GRAPH_FILE.with_suffix(".json.tmp")
-    with open(tmp, "w") as f:
-        json.dump(graph, f)
-    tmp.replace(GRAPH_FILE)
+    fileio.atomic_write_json(GRAPH_FILE, graph)
     print(f"Saved graph to {GRAPH_FILE}")
 
 
@@ -146,8 +147,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     if not os.environ.get("VAULT_PATH"):
-        import sys
-        print("ERROR: VAULT_PATH environment variable is not set. See .env.example.",
-              file=sys.stderr)
-        sys.exit(1)
-    main()
+        scriptkit.fail(
+            "VAULT_PATH environment variable is not set. See .env.example.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=scriptkit.json_mode_requested(),
+        )
+    with scriptkit.error_boundary(json_mode=scriptkit.json_mode_requested()):
+        main()

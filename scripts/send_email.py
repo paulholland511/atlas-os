@@ -27,16 +27,42 @@ Usage:
 import json
 import os
 import smtplib
+import socket
 import sys
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import retry as retrylib  # noqa: E402
+from atlas_os import scriptkit  # noqa: E402
+
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
 SENDER_NAME = os.environ.get("SENDER_NAME", "Atlas")
+# Socket timeout (seconds) for every SMTP operation, so a wedged server can't
+# hang the send forever. Overridable via SMTP_TIMEOUT.
+SMTP_TIMEOUT = float(os.environ.get("SMTP_TIMEOUT", "30"))
+
+# Transient SMTP/socket failures worth retrying with backoff. A bare ``OSError``
+# (e.g. a definitive misconfiguration) is intentionally *not* here, so it fails
+# fast instead of retrying pointlessly.
+_SMTP_TRANSIENT: tuple[type[BaseException], ...] = (
+    smtplib.SMTPConnectError,
+    smtplib.SMTPServerDisconnected,
+    smtplib.SMTPHeloError,
+    ConnectionError,
+    TimeoutError,
+    socket.timeout,
+    socket.gaierror,
+)
+_SMTP_RETRY_POLICY = retrylib.RetryPolicy(
+    attempts=3, base_delay=1.0, backoff=2.0, retry_on=_SMTP_TRANSIENT
+)
 
 
 def get_app_password() -> str:
@@ -48,15 +74,29 @@ def get_app_password() -> str:
         print("  1. Go to https://myaccount.google.com/apppasswords")
         print("  2. Generate an app password for 'Mail'")
         print("  3. export SMTP_APP_PASSWORD='your-app-password'")
-        sys.exit(1)
+        sys.exit(scriptkit.EXIT_CONFIG)
     return password
+
+
+def _deliver(msg: MIMEMultipart, recipients: list[str], app_password: str) -> None:
+    """One SMTP delivery attempt with an explicit timeout (retried by caller)."""
+    server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=SMTP_TIMEOUT)
+    try:
+        server.starttls()
+        server.login(SENDER_EMAIL, app_password)
+        server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
+    finally:
+        try:
+            server.quit()
+        except Exception:  # noqa: BLE001 - closing a broken connection is best-effort
+            pass
 
 
 def send_email(to, subject, body_html=None, body_text=None, attachments=None) -> bool:
     """Send an email via SMTP with STARTTLS."""
     if not SENDER_EMAIL:
         print("ERROR: SENDER_EMAIL environment variable is not set.")
-        sys.exit(1)
+        sys.exit(scriptkit.EXIT_CONFIG)
 
     app_password = get_app_password()
 
@@ -89,33 +129,48 @@ def send_email(to, subject, body_html=None, body_text=None, attachments=None) ->
             else:
                 print(f"WARNING: Attachment not found: {filepath}")
 
+    recipients = [to] if isinstance(to, str) else list(to)
+
+    def _on_retry(exc: BaseException, attempt: int, delay: float) -> None:
+        print(
+            f"SMTP attempt {attempt} failed ({exc}); retrying in {delay:.0f}s…",
+            file=sys.stderr,
+        )
+
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SENDER_EMAIL, app_password)
-        recipients = [to] if isinstance(to, str) else to
-        server.sendmail(SENDER_EMAIL, recipients, msg.as_string())
-        server.quit()
+        retrylib.retry_call(
+            _deliver, msg, recipients, app_password,
+            policy=_SMTP_RETRY_POLICY, on_retry=_on_retry,
+        )
         print(f"Email sent successfully to {msg['To']}")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - report any send failure, never traceback
         print(f"ERROR sending email: {e}")
         return False
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        data = json.loads(sys.argv[1])
-        send_email(
-            to=data["to"],
-            subject=data["subject"],
-            body_html=data.get("body_html"),
-            body_text=data.get("body_text"),
-            attachments=data.get("attachments"),
-        )
-    else:
+def main() -> int:
+    if len(sys.argv) <= 1:
         print(
             'Usage: python send_email.py \'{"to":"someone@example.com",'
             '"subject":"sub","body_html":"<p>content</p>",'
             '"attachments":["/path/file.pdf"]}\''
         )
+        return scriptkit.EXIT_CONFIG
+    try:
+        data = json.loads(sys.argv[1])
+    except json.JSONDecodeError as exc:
+        return scriptkit.emit_error(f"Invalid JSON payload: {exc}", code=scriptkit.EXIT_CONFIG)
+    ok = send_email(
+        to=data["to"],
+        subject=data["subject"],
+        body_html=data.get("body_html"),
+        body_text=data.get("body_text"),
+        attachments=data.get("attachments"),
+    )
+    return scriptkit.EXIT_OK if ok else scriptkit.EXIT_ERROR
+
+
+if __name__ == "__main__":
+    with scriptkit.error_boundary():
+        sys.exit(main())

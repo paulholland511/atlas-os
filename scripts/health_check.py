@@ -44,6 +44,11 @@ from pathlib import Path
 from typing import Callable
 from urllib import request, error
 
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import scriptkit  # noqa: E402
+
 VAULT = Path(os.path.expanduser(os.environ.get("VAULT_PATH", "."))).resolve()
 RAG_DIR = Path(os.path.expanduser(os.environ.get("RAG_DIR", str(VAULT / ".rag"))))
 SCHEDULED_DIR = Path(os.path.expanduser(
@@ -210,12 +215,20 @@ def check_email() -> Result:
 
 
 def check_git() -> Result:
-    lock = VAULT / ".git" / "index.lock"
+    git_dir = VAULT / ".git"
     checks: list[tuple[str, bool, str]] = []
-    if lock.exists():
-        checks.append(("index.lock", False, "stale lock present"))
+    # Detect any stale git lock (index.lock / HEAD.lock / ref locks) — each one
+    # blocks the next git operation until cleared.
+    present_locks = [
+        name for name in ("index.lock", "HEAD.lock")
+        if (git_dir / name).exists()
+    ]
+    if (git_dir / "refs").is_dir():
+        present_locks.extend(str(p.relative_to(git_dir)) for p in (git_dir / "refs").rglob("*.lock"))
+    if present_locks:
+        checks.append(("git locks", False, f"stale: {', '.join(present_locks)}"))
     else:
-        checks.append(("index.lock", True, "absent"))
+        checks.append(("git locks", True, "none"))
     r = subprocess.run(
         ["git", "-C", str(VAULT), "status", "--porcelain"],
         capture_output=True, text=True, timeout=10,
@@ -333,4 +346,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    with scriptkit.error_boundary(json_mode=scriptkit.json_mode_requested()):
+        sys.exit(main())

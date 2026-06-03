@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime, timedelta
@@ -51,7 +52,12 @@ except ImportError as e:
     print(f"Error importing TradingAgents: {e}")
     print("Install it: git clone the TradingAgents project and `pip install -e .`,")
     print("then set TRADING_AGENTS_PATH to its location.")
-    sys.exit(1)
+    sys.exit(2)
+
+from _bootstrap import ensure_atlas_os  # noqa: E402
+
+ensure_atlas_os()
+from atlas_os import fileio, netio, scriptkit  # noqa: E402
 
 # Configuration (all from environment)
 def _try_import_backends():
@@ -111,9 +117,9 @@ DEFAULT_TICKERS = [
 
 
 def check_lm_studio() -> bool:
-    """Check if the LLM endpoint is available."""
+    """Check if the LLM endpoint is available (single-shot probe with timeout)."""
     try:
-        response = requests.get(f"{LM_STUDIO_URL}/models", timeout=5)
+        response = requests.get(f"{LM_STUDIO_URL}/models", timeout=netio.DEFAULT_TIMEOUT)
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -209,66 +215,90 @@ def format_briefing(results: list, date: str) -> str:
 
 
 def save_briefing(content: str, date: str) -> Path:
-    """Save briefing to the vault."""
+    """Save briefing to the vault (atomic write so a crash can't truncate it)."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_path = OUTPUT_DIR / f"trading-briefing-{date}.md"
-    output_path.write_text(content, encoding="utf-8")
+    fileio.atomic_write_text(output_path, content)
     return output_path
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a TradingAgents briefing")
     parser.add_argument("--ticker", type=str, help="Specific ticker (e.g. BTC-USD)")
     parser.add_argument("--date", type=str, help="Analysis date YYYY-MM-DD (default: yesterday)")
     parser.add_argument("--dry-run", action="store_true", help="Check config without running")
+    parser.add_argument("--json", action="store_true", dest="json_out",
+                        help="Emit machine-readable JSON instead of a human report")
     args = parser.parse_args()
+    json_mode = args.json_out
 
     analysis_date = args.date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     tickers = [args.ticker] if args.ticker else DEFAULT_TICKERS
 
-    print("=" * 60)
-    print("TradingAgents Trading Briefing Generator")
-    print("=" * 60)
-    print(f"Analysis Date: {analysis_date}")
-    print(f"Tickers: {', '.join(tickers)}")
-    print(f"LLM URL: {LM_STUDIO_URL}")
-    print(f"Model: {LM_STUDIO_MODEL}\n")
+    if not json_mode:
+        print("=" * 60)
+        print("TradingAgents Trading Briefing Generator")
+        print("=" * 60)
+        print(f"Analysis Date: {analysis_date}")
+        print(f"Tickers: {', '.join(tickers)}")
+        print(f"LLM URL: {LM_STUDIO_URL}")
+        print(f"Model: {LM_STUDIO_MODEL}\n")
+        print("Checking LLM endpoint availability...")
 
-    print("Checking LLM endpoint availability...")
+    # Graceful degradation: a down LLM endpoint is a clear, non-traceback error.
     if not check_lm_studio():
-        print(f"\nERROR: LLM endpoint not available at {LM_STUDIO_URL}")
-        print("Ensure your local LLM server is running and the model is loaded.")
-        sys.exit(1)
-    print("LLM endpoint is available.")
+        scriptkit.fail(
+            netio.unreachable_message(LM_STUDIO_URL, "LLM endpoint")
+            + " Ensure your local LLM server is running and the model is loaded.",
+            json_mode=json_mode,
+        )
+    if not json_mode:
+        print("LLM endpoint is available.")
 
     if args.dry_run:
-        print("\nDry run complete. Configuration is valid.")
+        if json_mode:
+            print(json.dumps({"status": "ok", "dry_run": True, "tickers": tickers}))
+        else:
+            print("\nDry run complete. Configuration is valid.")
         return
 
-    print("Initializing TradingAgentsGraph...")
+    if not json_mode:
+        print("Initializing TradingAgentsGraph...")
     ta = TradingAgentsGraph(debug=True, config=get_trading_config())
 
     results = []
     for ticker in tickers:
         result = analyze_ticker(ta, ticker, analysis_date)
         results.append(result)
-        print(f"  {ticker}: {'OK' if result['success'] else 'FAILED'}")
+        if not json_mode:
+            print(f"  {ticker}: {'OK' if result['success'] else 'FAILED'}")
 
-    print("\nGenerating briefing...")
     content = format_briefing(results, analysis_date)
     output_path = save_briefing(content, analysis_date)
-
-    print("\n" + "=" * 60)
-    print("BRIEFING COMPLETE")
-    print("=" * 60)
-    print(f"Output saved to: {output_path}")
     success_count = sum(1 for r in results if r["success"])
-    print(f"Results: {success_count}/{len(results)} analyses completed successfully")
+
+    if json_mode:
+        print(json.dumps({
+            "status": "ok",
+            "date": analysis_date,
+            "output": str(output_path),
+            "analyzed": len(results),
+            "succeeded": success_count,
+        }))
+    else:
+        print("\n" + "=" * 60)
+        print("BRIEFING COMPLETE")
+        print("=" * 60)
+        print(f"Output saved to: {output_path}")
+        print(f"Results: {success_count}/{len(results)} analyses completed successfully")
 
 
 if __name__ == "__main__":
     if not os.environ.get("VAULT_PATH"):
-        print("ERROR: VAULT_PATH environment variable is not set. See .env.example.",
-              file=sys.stderr)
-        sys.exit(1)
-    main()
+        scriptkit.fail(
+            "VAULT_PATH environment variable is not set. See .env.example.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=scriptkit.json_mode_requested(),
+        )
+    with scriptkit.error_boundary(json_mode=scriptkit.json_mode_requested()):
+        main()

@@ -25,11 +25,32 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import gitutil, scriptkit  # noqa: E402
+
 VAULT = Path(os.path.expanduser(os.environ.get("VAULT_PATH", "."))).resolve()
 
 
 def run(cmd: list[str]) -> str:
-    result = subprocess.run(cmd, cwd=VAULT, capture_output=True, text=True, check=True)
+    """Run a git command in the vault, returning stdout.
+
+    Converts a missing ``git`` binary, a timeout, or a non-zero exit into a
+    :class:`atlas_os.gitutil.GitError` so the caller surfaces a clean message
+    instead of a raw ``CalledProcessError`` traceback.
+    """
+    try:
+        result = subprocess.run(
+            cmd, cwd=VAULT, capture_output=True, text=True, check=True, timeout=30
+        )
+    except FileNotFoundError as exc:
+        raise gitutil.GitError("git is not installed or not on PATH.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise gitutil.GitError(f"git command timed out: {' '.join(cmd)}") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip() or f"exit {exc.returncode}"
+        raise gitutil.GitError(f"git command failed: {detail}") from exc
     return result.stdout.strip()
 
 
@@ -170,6 +191,13 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", dest="json_out", help="JSON output")
     args = parser.parse_args()
 
+    if not gitutil.is_git_repo(VAULT):
+        scriptkit.fail(
+            f"{VAULT} is not a git repository. Run `git init` there first.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=args.json_out,
+        )
+
     entries = get_commits(args.since)
     agg = aggregate(entries)
 
@@ -193,8 +221,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     if not os.environ.get("VAULT_PATH"):
-        import sys
-        print("ERROR: VAULT_PATH environment variable is not set. See .env.example.",
-              file=sys.stderr)
-        sys.exit(1)
-    main()
+        scriptkit.fail(
+            "VAULT_PATH environment variable is not set. See .env.example.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=scriptkit.json_mode_requested(),
+        )
+    with scriptkit.error_boundary(json_mode=scriptkit.json_mode_requested()):
+        main()

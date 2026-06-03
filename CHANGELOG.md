@@ -7,6 +7,39 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Production hardening for the pipeline scripts.** Every script under
+  [`scripts/`](scripts) now degrades gracefully instead of dumping a traceback,
+  backed by five new reusable modules:
+  - [`atlas_os/retry.py`](atlas_os/retry.py) — a `RetryPolicy` plus a `retry`
+    decorator and `retry_call` helper for exponential-backoff retries with an
+    injectable `sleep` (so tests stay instant);
+  - [`atlas_os/netio.py`](atlas_os/netio.py) — HTTP with explicit `(10s, 30s)`
+    connect/read timeouts, retries on transient failures and `429/5xx`, and clear
+    *"X at host:port is not responding"* errors (`EndpointUnreachable` /
+    `HTTPStatusError`) rather than raw `requests` tracebacks;
+  - [`atlas_os/fileio.py`](atlas_os/fileio.py) — atomic writes
+    (write-temp → `fsync` → `os.replace`) for critical files like `vectors.json`
+    and `graph.json`, plus reads that turn missing / permission-denied /
+    iCloud-offloaded (`EDEADLK`, dataless stub) / corrupt-JSON cases into typed
+    errors or a caller-supplied default;
+  - [`atlas_os/gitutil.py`](atlas_os/gitutil.py) — stale lock cleanup
+    (`index.lock`, `HEAD.lock`, ref locks) and `worktree prune` before writes,
+    repo detection, and timeout-guarded command running (`GitError`);
+  - [`atlas_os/scriptkit.py`](atlas_os/scriptkit.py) — consistent exit codes
+    (`0` success, `1` error, `2` config), `--json` structured error output, and
+    an `error_boundary` context manager that converts any exception into a
+    one-line message — no script ever shows a user a Python traceback.
+
+  Wired through: `embed_vault` (retrying timeout-bounded embeddings + atomic
+  vector store + fail-fast on a down endpoint), `trading_briefing` (clear
+  endpoint errors, `--json`, atomic briefing write), `send_email` (SMTP timeout
+  and backoff retries on transient failures), `vault_commit` /
+  `vault_changelog` (lock cleanup, not-a-repo detection, clean git errors),
+  `build_graph` (atomic graph write), and `health_check` (HEAD/ref lock
+  detection, traceback-free). New unit suites cover every module
+  ([`test_retry`](tests/test_retry.py), [`test_netio`](tests/test_netio.py),
+  [`test_fileio`](tests/test_fileio.py), [`test_gitutil`](tests/test_gitutil.py),
+  [`test_scriptkit`](tests/test_scriptkit.py)).
 - **End-to-end integration test suite.** A new
   [`tests/test_integration.py`](tests/test_integration.py) drives the real
   `atlas` CLI through Typer's `CliRunner` and exercises the pipelines as a user

@@ -37,6 +37,13 @@ from pathlib import Path
 
 import requests
 
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import fileio, netio  # noqa: E402
+from atlas_os import retry as retrylib  # noqa: E402
+from atlas_os import scriptkit  # noqa: E402
+
 try:
     import pdfplumber  # type: ignore[import-untyped]
     _PDFPLUMBER_AVAILABLE = True
@@ -236,49 +243,89 @@ def extract_pdf_text(filepath: Path) -> str:
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
 
+# Five tries with 1s → 16s exponential backoff. ``retry_on`` is every requests
+# error so the ``should_retry`` predicate can make the per-status decision.
+_EMBED_RETRY_POLICY = retrylib.RetryPolicy(
+    attempts=5,
+    base_delay=1.0,
+    backoff=2.0,
+    max_delay=30.0,
+    retry_on=(requests.exceptions.RequestException,),
+)
+
+
+def _should_retry_embed(exc: BaseException) -> bool:
+    """Retry connection/timeout errors and retryable HTTP statuses (429/5xx)."""
+    if isinstance(exc, requests.exceptions.HTTPError):
+        resp = getattr(exc, "response", None)
+        return resp is not None and resp.status_code in netio.RETRY_STATUS_CODES
+    return True  # connection reset, timeout, etc.
+
+
 def embed(texts: list[str]) -> list[list[float]]:
-    """Call the embeddings endpoint. Returns list of vectors."""
+    """Call the embeddings endpoint with timeouts + retries. Returns vectors.
+
+    Raises :class:`atlas_os.netio.EndpointUnreachable` (connection failed) or
+    :class:`atlas_os.netio.HTTPStatusError` (persistent bad status) with a clear,
+    host-aware message instead of bubbling a raw ``requests`` traceback.
+    """
     headers = {"Content-Type": "application/json"}
     if API_KEY:
         headers["Authorization"] = f"Bearer {API_KEY}"
     payload = {"model": EMBED_MODEL, "input": texts}
-    for attempt in range(5):
-        try:
-            r = requests.post(EMBED_URL, headers=headers, json=payload, timeout=60)
-            r.raise_for_status()
-            data = r.json()
-            items = sorted(data["data"], key=lambda x: x["index"])
-            return [item["embedding"] for item in items]
-        except requests.exceptions.HTTPError:
-            if r.status_code == 429:
-                wait = 2 ** attempt
-                print(f"  Rate limited, waiting {wait}s…", file=sys.stderr)
-                time.sleep(wait)
-            else:
-                raise
-        except requests.exceptions.RequestException as e:
-            if attempt < 4:
-                print(f"  Request error ({e}), retrying…", file=sys.stderr)
-                time.sleep(2 ** attempt)
-            else:
-                raise
-    raise RuntimeError("Embedding failed after 5 attempts")
+
+    def _post() -> requests.Response:
+        r = requests.post(EMBED_URL, headers=headers, json=payload, timeout=netio.DEFAULT_TIMEOUT)
+        r.raise_for_status()
+        return r
+
+    def _on_retry(exc: BaseException, attempt: int, delay: float) -> None:
+        print(
+            f"  Embedding attempt {attempt} failed ({exc}); retrying in {delay:.0f}s…",
+            file=sys.stderr,
+        )
+
+    try:
+        r = retrylib.retry_call(
+            _post,
+            policy=_EMBED_RETRY_POLICY,
+            should_retry=_should_retry_embed,
+            on_retry=_on_retry,
+        )
+    except requests.exceptions.HTTPError as exc:
+        resp = getattr(exc, "response", None)
+        code = resp.status_code if resp is not None else 0
+        raise netio.HTTPStatusError(
+            f"Embeddings endpoint at {netio.endpoint_label(EMBED_URL)} returned HTTP "
+            f"{code or '?'} after retries.",
+            url=EMBED_URL,
+            status_code=code,
+        ) from exc
+    except requests.exceptions.RequestException as exc:
+        raise netio.EndpointUnreachable(
+            netio.unreachable_message(EMBED_URL, "Embeddings endpoint"), url=EMBED_URL
+        ) from exc
+
+    data = r.json()
+    items = sorted(data["data"], key=lambda x: x["index"])
+    return [item["embedding"] for item in items]
 
 
 # ── Vector store ──────────────────────────────────────────────────────────────
 
 def load_vectors() -> list[dict]:
-    if VECTORS_FILE.exists():
-        with open(VECTORS_FILE) as f:
-            return json.load(f)
-    return []
+    """Load the vector store, tolerating a missing or crash-corrupted file.
+
+    A truncated ``vectors.json`` (e.g. from a killed run) degrades to an empty
+    store — a full re-embed — rather than aborting with a JSON error.
+    """
+    data = fileio.read_json(VECTORS_FILE, default=[])
+    return data if isinstance(data, list) else []
 
 
 def save_vectors(vectors: list[dict]) -> None:
-    tmp = VECTORS_FILE.with_suffix(".json.tmp")
-    with open(tmp, "w") as f:
-        json.dump(vectors, f)
-    os.replace(tmp, VECTORS_FILE)
+    """Atomically persist the vector store (write-temp-then-rename + fsync)."""
+    fileio.atomic_write_json(VECTORS_FILE, vectors)
     print(f"Saved {len(vectors)} vectors to {VECTORS_FILE}")
 
 
@@ -567,6 +614,13 @@ def run_embed(mode: str, test_limit: int = 0, folder_filter: str = "",
     total_chunks = len(all_chunks)
     print(f"Created {total_chunks} chunks from {len(files)} files")
 
+    # Fail fast with a clear message if the embeddings server is down entirely,
+    # rather than retrying every batch only to write an empty store.
+    if total_chunks and not netio.is_reachable(EMBED_URL):
+        raise netio.EndpointUnreachable(
+            netio.unreachable_message(EMBED_URL, "Embeddings endpoint"), url=EMBED_URL
+        )
+
     if mode == "incremental" or test_limit > 0 or folder_filter or pdfs_only:
         existing = load_vectors()
         touched_files = {str(f.relative_to(VAULT_DIR)) for f in files}
@@ -658,12 +712,7 @@ def run_embed(mode: str, test_limit: int = 0, folder_filter: str = "",
             print(f"  Graph build failed: {e}", file=sys.stderr)
 
 
-if __name__ == "__main__":
-    if not os.environ.get("VAULT_PATH"):
-        print("ERROR: VAULT_PATH environment variable is not set. See .env.example.",
-              file=sys.stderr)
-        sys.exit(1)
-
+def main() -> None:
     args = sys.argv[1:]
 
     checkpoint_interval = 50
@@ -716,3 +765,13 @@ if __name__ == "__main__":
     run_embed(mode, test_limit=test_limit, folder_filter=folder_filter,
               pdfs_only=pdfs_only, checkpoint_interval=checkpoint_interval,
               batch_size=batch_size)
+
+
+if __name__ == "__main__":
+    if not os.environ.get("VAULT_PATH"):
+        scriptkit.fail(
+            "VAULT_PATH environment variable is not set. See .env.example.",
+            code=scriptkit.EXIT_CONFIG,
+        )
+    with scriptkit.error_boundary():
+        main()

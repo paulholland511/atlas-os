@@ -28,9 +28,10 @@ class _FakeSMTP:
 
     instances: list["_FakeSMTP"] = []
 
-    def __init__(self, server: str, port: int) -> None:
+    def __init__(self, server: str, port: int, timeout: float | None = None) -> None:
         self.server = server
         self.port = port
+        self.timeout = timeout
         self.started_tls = False
         self.logged_in: tuple[str, str] | None = None
         self.sent: tuple[str, list[str], str] | None = None
@@ -109,7 +110,7 @@ def test_send_email_missing_attachment_still_sends(fake_smtp, tmp_path) -> None:
 
 
 def test_send_email_returns_false_on_smtp_failure(monkeypatch) -> None:
-    def boom(server, port):
+    def boom(server, port, timeout=None):
         raise OSError("connection refused")
 
     monkeypatch.setattr(send_email.smtplib, "SMTP", boom)

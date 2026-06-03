@@ -26,11 +26,18 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from _bootstrap import ensure_atlas_os
+
+ensure_atlas_os()
+from atlas_os import gitutil, scriptkit  # noqa: E402
+
 VAULT = Path(os.path.expanduser(os.environ.get("VAULT_PATH", "."))).resolve()
 
 
 def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=VAULT, capture_output=True, text=True, check=check)
+    return subprocess.run(
+        cmd, cwd=VAULT, capture_output=True, text=True, check=check, timeout=30
+    )
 
 
 def git_status() -> dict[str, list[str]]:
@@ -109,15 +116,24 @@ def stage_all(stats: dict[str, list[str]]) -> None:
 
 
 def main() -> None:
-    subprocess.run(["git", "worktree", "prune"], cwd=VAULT, capture_output=True)
-    lock_file = os.path.join(str(VAULT), ".git", "index.lock")
-    if os.path.exists(lock_file):
-        os.remove(lock_file)
-
     parser = argparse.ArgumentParser(description="Commit vault changes to git")
     parser.add_argument("--dry-run", action="store_true", help="Report changes without committing")
     parser.add_argument("--json", action="store_true", dest="json_out", help="Output stats as JSON")
     args = parser.parse_args()
+    json_mode = args.json_out
+
+    if not gitutil.is_git_repo(VAULT):
+        scriptkit.fail(
+            f"{VAULT} is not a git repository. Run `git init` there first.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=json_mode,
+        )
+
+    # Clear stale index/HEAD/ref locks left by an interrupted git process so the
+    # commit below doesn't fail with "Another git process seems to be running".
+    removed = gitutil.clear_stale_locks(VAULT)
+    if removed and not json_mode:
+        print(f"Cleared stale git lock(s): {', '.join(removed)}")
 
     stats = git_status()
     total = len(stats["new"]) + len(stats["modified"]) + len(stats["deleted"])
@@ -163,8 +179,8 @@ def main() -> None:
     proc = run(["git", "commit", "-m", message], check=False)
 
     if proc.returncode != 0:
-        print(f"Git commit failed:\n{proc.stderr}", file=sys.stderr)
-        sys.exit(1)
+        detail = (proc.stderr or proc.stdout).strip() or f"exit {proc.returncode}"
+        scriptkit.fail(f"Git commit failed: {detail}", json_mode=json_mode)
 
     commit_hash = ""
     for line in proc.stdout.splitlines():
@@ -195,7 +211,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     if not os.environ.get("VAULT_PATH"):
-        print("ERROR: VAULT_PATH environment variable is not set. See .env.example.",
-              file=sys.stderr)
-        sys.exit(1)
-    main()
+        scriptkit.fail(
+            "VAULT_PATH environment variable is not set. See .env.example.",
+            code=scriptkit.EXIT_CONFIG,
+            json_mode=scriptkit.json_mode_requested(),
+        )
+    with scriptkit.error_boundary(json_mode=scriptkit.json_mode_requested()):
+        main()

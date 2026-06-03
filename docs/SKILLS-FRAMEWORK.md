@@ -177,7 +177,7 @@ The three packs this install ships:
 
 | Pack | Skills | Sets up |
 |---|---|---|
-| `knowledge` | `nightly-obsidian-index`, `nightly-rag-incremental`, `weekly-rag-full-reembed`, `daily-session-capture`, `vault-lint-report`, `weekly-digest-report` | Vault management — nightly commit & index, incremental + full RAG re-embedding, daily Cowork session capture, lint reports, and the weekly digest. |
+| `knowledge` | `nightly-obsidian-index`, `nightly-rag-incremental`, `weekly-rag-full-reembed`, `morning-session-capture`, `afternoon-session-capture`, `vault-lint-report`, `weekly-digest-report` | Vault management — nightly commit & index, incremental + full RAG re-embedding, twice-daily Cowork session capture (morning + afternoon), lint reports, and the weekly digest. |
 | `communication` | `atlas-daily-report-email`, `inbox-triage-digest`, `generate-vault-report-doc` | Email & reporting — daily report email, inbox-triage digest, and vault report docs. |
 | `trading` | `daily-trading-report`, `topic-research-brief` | Trading intelligence — daily trading report and on-demand topic research briefs. |
 

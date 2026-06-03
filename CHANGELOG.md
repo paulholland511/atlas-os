@@ -6,6 +6,26 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Session capture is now twice-daily by default (morning + afternoon).** Two
+  new scheduled skills, **`morning-session-capture`** (~09:00) and
+  **`afternoon-session-capture`** (~17:00–18:00), each run
+  `ATLAS_TRIGGER=scheduled atlas session save --since 12h`. They cover a 12-hour
+  window apiece so work lands in the vault closer to when it happened, and the
+  shared watermark in `.atlas/last_session_save.txt` means the overlapping
+  windows never double-write a session. The **`knowledge`** pack now installs
+  both in place of the single daily skill.
+- The original **`daily-session-capture`** skill is retained for users who prefer
+  a single nightly `--since 24h` run; its SKILL.md now points to the twice-daily
+  pair as the recommended default.
+
+### Added
+- **`SESSION_CAPTURE_FREQUENCY` configuration.** A scheduling hint documenting
+  your intended session-capture cadence — `twice` (default), `daily`, `hourly`,
+  or `manual`. Documented in [`.env.example`](.env.example),
+  [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md), and
+  [`docs/SCHEDULED-TASKS.md`](docs/SCHEDULED-TASKS.md).
+
 ## [1.1.0] — 2026-06-03
 
 ### Added

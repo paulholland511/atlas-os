@@ -583,7 +583,9 @@ your `.env`. Then register it on the cadence below.
 |---|---|---|
 | `nightly-obsidian-index` | Nightly (~02:00) | Index changed notes, sync the wiki, append the hot cache, commit the vault, write a morning briefing |
 | `nightly-rag-incremental` | Nightly (after the index) | Embed only notes changed since the last run |
-| `daily-session-capture` | Nightly (~23:30) | Save the day's Cowork chat transcripts to the vault as session-log notes |
+| `morning-session-capture` | Morning (~09:00) | Capture overnight/early-morning Cowork transcripts to the vault (`--since 12h`) |
+| `afternoon-session-capture` | Late afternoon (~17:00–18:00) | Capture the day's Cowork transcripts to the vault (`--since 12h`) |
+| `daily-session-capture` | Nightly (~23:30) | Single once-a-day alternative — save the day's Cowork transcripts (`--since 24h`) |
 | `daily-job-tracker-update` | Weekday mornings | Scan email for application updates; update the tracker |
 | `afternoon-job-tracker-update` | Weekday ~14:00 | Catch afternoon emails; update the tracker |
 | `atlas-daily-report-email` | Daily (~09:30) | Email a status report (job search, health, action items) |

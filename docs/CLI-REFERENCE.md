@@ -738,7 +738,8 @@ path `~/Library/Application Support/Claude/local-agent-mode-sessions`).
 ```bash
 atlas session list
 atlas session save                 # new/changed since last run
-atlas session save --since 24h     # the day's sessions (for nightly capture)
+atlas session save --since 12h     # half-day window (twice-daily capture, the default)
+atlas session save --since 24h     # the day's sessions (single nightly capture)
 atlas session save --all --json
 ```
 
@@ -761,6 +762,7 @@ and [`docs/CONFIGURATION.md`](CONFIGURATION.md) for the annotated source.
 | `SCHEDULED_DIR` | — | Where your Claude scheduled-task `SKILL.md` folders live. |
 | `ATLAS_SKILLS_DIR` | `$VAULT_PATH/.claude/skills` | Where `atlas skills install` writes installed skills. |
 | `CLAUDE_SESSIONS_DIR` | macOS Cowork session store | Where `atlas session` reads Cowork transcripts from. |
+| `SESSION_CAPTURE_FREQUENCY` | `twice` | Intended cadence for the session-capture skills: `twice` (morning + afternoon, each `--since 12h`), `daily` (one nightly `--since 24h` run), `hourly` (every hour, heavy users), or `manual` (no schedule — run `atlas session save` yourself). A scheduling hint you wire your cron/skills to; documents intent rather than enforcing it. |
 
 ### Embeddings (RAG)
 

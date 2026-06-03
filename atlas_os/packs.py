@@ -42,14 +42,15 @@ PACKS: dict[str, Pack] = {
         name="knowledge",
         description=(
             "Vault management — nightly commit & index, incremental and full RAG "
-            "re-embedding, daily Cowork session capture, lint reports, and the "
-            "weekly knowledge digest."
+            "re-embedding, twice-daily Cowork session capture (morning + "
+            "afternoon), lint reports, and the weekly knowledge digest."
         ),
         skills=(
             "nightly-obsidian-index",
             "nightly-rag-incremental",
             "weekly-rag-full-reembed",
-            "daily-session-capture",
+            "morning-session-capture",
+            "afternoon-session-capture",
             "vault-lint-report",
             "weekly-digest-report",
         ),

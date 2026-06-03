@@ -1,18 +1,12 @@
 ---
-name: daily-session-capture
-description: Nightly capture of the day's Cowork chat transcripts into the vault as session-log notes.
+name: afternoon-session-capture
+description: Afternoon capture of the day's Cowork chat transcripts into the vault as session-log notes.
 ---
 
-Capture every Cowork session from the last 24 hours into the vault as a clean,
-self-describing markdown note, so your work is searchable alongside the rest of
-your knowledge base.
-
-> **Recommended default is twice daily.** Most users are better served by the
-> `morning-session-capture` + `afternoon-session-capture` pair (each with a
-> 12-hour window), so the day's work lands in the vault closer to when it
-> happened and a long-running machine never loses a full day to a single missed
-> run. Use this once-a-day skill if you prefer a single nightly capture; set
-> `SESSION_CAPTURE_FREQUENCY=daily` to document that choice.
+Capture every Cowork session from the last 12 hours into the vault as a clean,
+self-describing markdown note, so the day's work is searchable alongside the rest
+of your knowledge base. This is the **afternoon** half of the recommended
+twice-daily capture pattern (pair it with `morning-session-capture`).
 
 > Placeholders: replace `{{VAULT_PATH}}` with your vault path (the `VAULT_PATH`
 > env var). Scripts live in the Atlas OS `scripts/` directory referenced as
@@ -25,10 +19,10 @@ session — and confirm what was captured.
 **Steps:**
 
 1. Request access to `{{VAULT_PATH}}`
-2. Run the capture, scoped to the last 24 hours and routed through the audit
+2. Run the capture, scoped to the last 12 hours and routed through the audit
    trail as an unattended run:
    ```bash
-   ATLAS_TRIGGER=scheduled VAULT_PATH={{VAULT_PATH}} atlas session save --since 24h --json
+   ATLAS_TRIGGER=scheduled VAULT_PATH={{VAULT_PATH}} atlas session save --since 12h --json
    ```
 3. The command will:
    - Read Cowork session metadata + transcripts from the local session store
@@ -53,7 +47,9 @@ session — and confirm what was captured.
 sessions.
 
 **Constraints:**
-- Typically scheduled nightly (e.g. ~23:30, after the day's work).
+- Typically scheduled in the late afternoon (e.g. ~17:00–18:00). The 12-hour
+  window overlaps the morning capture's window, but the watermark means each
+  session is written once — overlap never double-writes.
 - Do NOT modify any vault notes other than those under `sessions/` and the
   `.atlas/last_session_save.txt` watermark.
 - Session notes contain your own conversation summaries — keep them in the

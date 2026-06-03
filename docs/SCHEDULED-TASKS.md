@@ -43,7 +43,9 @@ reads `LM_STUDIO_PORT`. Tokens with no value (e.g. `{{JOB_TRACKER_PATH}}`,
 |---|---|---|
 | `nightly-obsidian-index` | Nightly (e.g. 02:00) | Index new/changed notes, sync the wiki to 100% coverage, append the hot cache, commit the vault, write a morning briefing |
 | `nightly-rag-incremental` | Nightly (after the index) | Embed only notes changed since the last run |
-| `daily-session-capture` | Nightly (~23:30) | Save the day's Cowork chat transcripts to the vault as session-log notes |
+| `morning-session-capture` | Morning (~09:00) | Capture overnight/early-morning Cowork transcripts to the vault (`--since 12h`) |
+| `afternoon-session-capture` | Late afternoon (~17:00–18:00) | Capture the day's Cowork transcripts to the vault (`--since 12h`) |
+| `daily-session-capture` | Nightly (~23:30) | Single once-a-day alternative — save the day's Cowork transcripts (`--since 24h`) |
 | `daily-job-tracker-update` | Weekday mornings | Scan email for application updates; update the tracker |
 | `afternoon-job-tracker-update` | Weekday ~14:00 | Catch afternoon emails; update the tracker |
 | `atlas-daily-report-email` | Daily (e.g. 09:30) | Email a status report (job search, system health, action items) |
@@ -55,6 +57,15 @@ reads `LM_STUDIO_PORT`. Tokens with no value (e.g. `{{JOB_TRACKER_PATH}}`,
 > The job-tracker, trading, and newsletter tasks are entirely optional and only
 > useful if those workflows apply to you. Start with the index + RAG + health
 > tasks and add others as needed.
+
+> **Session capture cadence.** The recommended default is **twice daily** —
+> install `morning-session-capture` and `afternoon-session-capture` together
+> (each captures a 12-hour window; the shared watermark means overlap never
+> double-writes). Prefer a single nightly run? Use `daily-session-capture`
+> instead. Heavy users can schedule a capture hourly. Record your choice in
+> `.env` with `SESSION_CAPTURE_FREQUENCY` (`twice` | `daily` | `hourly` |
+> `manual`) so setup tooling and future-you know the intended cadence — see
+> [`CLI-REFERENCE.md`](CLI-REFERENCE.md#core).
 
 ## The skills catalog (agent discovery)
 

@@ -699,20 +699,28 @@ modified — all extracted locally, no LLM call. A watermark in
 `.atlas/last_session_save.txt` means a plain `atlas session save` only picks up
 what's new, so it's safe to run daily.
 
-To automate it, install the nightly capture skill and ask Cowork to run it:
+To automate it, the recommended default is **twice daily** — a morning and an
+afternoon capture, each covering a 12-hour window so your work lands in the vault
+closer to when it happened:
 
 ```bash
-atlas skills install daily-session-capture
+atlas skills install morning-session-capture
+atlas skills install afternoon-session-capture
 ```
 
-> "Every night at 11:30pm, run the `daily-session-capture` skill so today's
-> Cowork work is saved to my vault."
+> "Every morning at 9am run `morning-session-capture`, and every afternoon at
+> 5pm run `afternoon-session-capture`, so my Cowork work is saved to my vault."
 
-It runs `ATLAS_TRIGGER=scheduled atlas session save --since 24h`, so the capture
-shows up in your audit trail as an unattended run — closing the loop on the
-autonomous day. (It's also part of the [`knowledge` pack](SCHEDULED-TASKS.md), so
-`atlas skills install-pack knowledge` sets it up alongside the nightly index and
-RAG embed.)
+Both run `ATLAS_TRIGGER=scheduled atlas session save --since 12h`, so each capture
+shows up in your audit trail as an unattended run — and the shared watermark
+means the overlapping windows never double-write a session. Prefer a single
+nightly run? Install `daily-session-capture` instead (it uses `--since 24h`).
+Record your choice in `.env` with `SESSION_CAPTURE_FREQUENCY` (`twice` | `daily`
+| `hourly` | `manual`).
+
+The twice-daily pair is part of the [`knowledge` pack](SCHEDULED-TASKS.md), so
+`atlas skills install-pack knowledge` sets both up alongside the nightly index and
+RAG embed.
 
 ---
 

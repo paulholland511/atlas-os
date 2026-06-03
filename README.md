@@ -816,6 +816,8 @@ Full docs live in [`docs/`](docs/README.md):
 - [**Skills catalogue**](docs/SKILLS-CATALOGUE.md) — the full 160+ skill menu by
   domain · [**Skills framework**](docs/SKILLS-FRAMEWORK.md) — anatomy, lifecycle,
   and authoring your own.
+- [**Migration guide — v0.3.0 → v1.0**](docs/MIGRATION.md) — upgrading an existing
+  install (backward compatible; what's new and how to adopt it).
 - [Architecture](docs/ARCHITECTURE.md) · [Rebuild runbook](docs/REBUILD.md) ·
   [Data classification](docs/DATA-CLASSIFICATION.md) · [FAQ](docs/FAQ.md)
 - [Frontmatter schemas](schemas/frontmatter-schemas.md) ·

@@ -7,6 +7,17 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Migration guide — v0.3.0 → v1.0.** A new
+  [`docs/MIGRATION.md`](docs/MIGRATION.md) walks existing installs through the
+  upgrade. The headline: **v1.0 is fully backward compatible** — no breaking
+  changes, no env-var renames, no config edits. The recommended upgrade is
+  `pip install --upgrade atlas-os && atlas doctor --fix && atlas embed
+  --incremental`. The guide also catalogues everything additive in v1.0 (the
+  interactive `atlas init` wizard, the diagnosing/fixing `atlas doctor`, skill
+  packs, pluggable LLM backends, the audit trail, hardened scripts), the new
+  CLI flags (`doctor --fix`/`--json`, `skills packs`/`install-pack`), the new
+  internal modules, the new optional environment variables, and how to roll
+  back. Linked from [`README.md`](README.md) and [`docs/README.md`](docs/README.md).
 - **Pre-built skill packs — install a whole workflow in one command.** A new
   registry, [`atlas_os/packs.py`](atlas_os/packs.py), bundles related skills into
   curated **packs** so you can stand up a complete workflow at once instead of

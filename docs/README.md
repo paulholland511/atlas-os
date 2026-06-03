@@ -28,6 +28,8 @@ the source — see [**features/**](features/README.md):
 - [**SETUP.md**](SETUP.md) — step-by-step installation from scratch, the
   core-vs-optional feature matrix, and a [Docker quick-start](SETUP.md#run-in-docker-optional)
   (root [`Dockerfile`](../Dockerfile) · [`docker-compose.yml`](../docker-compose.yml)).
+- [**MIGRATION.md**](MIGRATION.md) — upgrading an existing install from **v0.3.0 →
+  v1.0**: a backward-compatible upgrade, what's new, and how to adopt it.
 - [**CONFIGURATION.md**](CONFIGURATION.md) — every environment variable: purpose,
   default, required/optional, and which scripts read it.
 - [**CLI-REFERENCE.md**](CLI-REFERENCE.md) — the complete `atlas` CLI reference

@@ -95,7 +95,7 @@ atlas-os 0.3.0
 | [`atlas graph`](#atlas-graph) | Rebuild the wikilink knowledge graph. |
 | [`atlas email`](#atlas-email) | Send an email via SMTP. |
 | [`atlas trading`](#atlas-trading) | Generate a trading research briefing *(optional)*. |
-| [`atlas skills`](#atlas-skills) | List, show, and install the agent skills. |
+| [`atlas skills`](#atlas-skills) | List, show, and install the agent skills, individually or as packs. |
 | [`atlas backends`](#atlas-backends) | Show detected LLM backends; `test` runs an inference. |
 | [`atlas audit`](#atlas-audit) | Inspect the append-only audit trail. |
 | [`atlas schemas`](#atlas-schemas) | Enforce per-folder frontmatter schemas. |
@@ -497,6 +497,8 @@ atlas skills [--sync] [--output PATH]
 atlas skills list
 atlas skills show NAME
 atlas skills install NAME [--force]
+atlas skills packs
+atlas skills install-pack NAME [--force]
 ```
 
 **Top-level flags** (apply when run with no subcommand)
@@ -514,14 +516,24 @@ atlas skills install NAME [--force]
 | `list` | | | List every available skill (slug + cadence + description). |
 | `show` | `NAME` | | Print a skill's `SKILL.md` to stdout. |
 | `install` | `NAME` | `--force` | Install a skill into the scheduled-tasks dir, filling in `{{PLACEHOLDER}}` tokens from the environment. `--force` overwrites an existing install. |
+| `packs` | | | List the pre-built skill packs (curated bundles for common workflows), with each pack's skill count and members. |
+| `install-pack` | `NAME` | `--force` | Install every skill in a pack at once, each filled exactly as `install` would. Already-installed members are skipped unless `--force` is passed. |
+
+**Skill packs** — curated bundles that set up a complete workflow in one command:
+
+| Pack | Skills | What it sets up |
+|---|---|---|
+| `knowledge` | 5 | Vault management — nightly commit & index, incremental + full RAG re-embedding, lint reports, weekly digest. |
+| `communication` | 3 | Email & reporting — daily report email, inbox-triage digest, vault report docs. |
+| `trading` | 2 | Trading intelligence — daily trading report, on-demand topic research briefs. |
 
 **Environment variables** — `--sync` and the default install location need
-`VAULT_PATH`. `install` writes to `$ATLAS_SKILLS_DIR` if set, otherwise
-`$VAULT_PATH/.claude/skills/<name>/`; placeholder values are pulled from the
-environment / `.env` (e.g. `SCHEDULED_DIR`, email vars).
+`VAULT_PATH`. `install` / `install-pack` write to `$ATLAS_SKILLS_DIR` if set,
+otherwise `$VAULT_PATH/.claude/skills/<name>/`; placeholder values are pulled
+from the environment / `.env` (e.g. `SCHEDULED_DIR`, email vars).
 
 **Exit codes** — `0` success; `1` install error or `VAULT_PATH` missing for
-`--sync`; `2` unknown skill name or missing `SKILL.md`.
+`--sync`; `2` unknown skill name, unknown pack name, or missing `SKILL.md`.
 
 **Examples**
 
@@ -532,6 +544,9 @@ atlas skills show atlas-daily-report-email
 atlas skills install atlas-daily-report-email # deploy one, filling placeholders
 atlas skills install atlas-daily-report-email --force
 atlas skills --sync                           # regenerate the catalog note
+atlas skills packs                            # list the curated skill packs
+atlas skills install-pack knowledge           # install a whole workflow at once
+atlas skills install-pack trading --force     # reinstall, overwriting existing
 ```
 
 ---

@@ -7,6 +7,25 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Pre-built skill packs — install a whole workflow in one command.** A new
+  registry, [`atlas_os/packs.py`](atlas_os/packs.py), bundles related skills into
+  curated **packs** so you can stand up a complete workflow at once instead of
+  installing skills one by one. Three packs ship:
+  - **`knowledge`** (5 skills) — vault management: nightly commit & index,
+    incremental + full RAG re-embedding, lint reports, and the weekly digest.
+  - **`communication`** (3 skills) — email & reporting: the daily report email,
+    inbox-triage digest, and vault report docs.
+  - **`trading`** (2 skills) — trading intelligence: the daily trading report and
+    on-demand topic research briefs.
+
+  Two new subcommands back this: **`atlas skills packs`** lists the packs with
+  their members and counts, and **`atlas skills install-pack <name>`** installs
+  every skill in a pack (same `{{PLACEHOLDER}}` substitution as `install`),
+  skipping already-installed members unless `--force` is passed. Every slug a
+  pack names is validated against `skills/` (`packs.validate_packs()`, asserted
+  in the test-suite) so a typo fails CI, not at install time. Documented in
+  [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md) and
+  [`docs/SKILLS-FRAMEWORK.md`](docs/SKILLS-FRAMEWORK.md).
 - **`atlas doctor` — from reporting to diagnosing and fixing.** The doctor no
   longer just lists OK / WARN / FAIL; it now groups checks by category
   (**Config / Git / LLM / RAG / SMTP**), colour-codes each row, and prints an

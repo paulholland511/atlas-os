@@ -162,6 +162,39 @@ For the rendered catalog of the skills this install ships, see
 
 ---
 
+## Skill packs
+
+A **pack** is a curated bundle of related skills that together set up a complete
+workflow, so you can install an entire workflow in one command instead of
+installing each skill one at a time. Packs are defined in `atlas_os/packs.py` —
+a registry mapping a pack name to a description and an ordered list of skill
+slugs. Installing a pack simply runs the per-skill installer
+([stage 2 of the lifecycle](#2-installation)) for every member, with the same
+`{{PLACEHOLDER}}` substitution; an already-installed member is skipped unless you
+pass `--force`.
+
+The three packs this install ships:
+
+| Pack | Skills | Sets up |
+|---|---|---|
+| `knowledge` | `nightly-obsidian-index`, `nightly-rag-incremental`, `weekly-rag-full-reembed`, `vault-lint-report`, `weekly-digest-report` | Vault management — nightly commit & index, incremental + full RAG re-embedding, lint reports, and the weekly digest. |
+| `communication` | `atlas-daily-report-email`, `inbox-triage-digest`, `generate-vault-report-doc` | Email & reporting — daily report email, inbox-triage digest, and vault report docs. |
+| `trading` | `daily-trading-report`, `topic-research-brief` | Trading intelligence — daily trading report and on-demand topic research briefs. |
+
+```bash
+atlas skills packs                  # list the packs with their members and counts
+atlas skills install-pack knowledge # install the whole knowledge workflow at once
+atlas skills install-pack trading --force  # reinstall, overwriting existing copies
+```
+
+Every slug a pack names must be a real skill under `skills/` —
+`atlas_os.packs.validate_packs()` enforces this, and the test-suite asserts it,
+so a typo in the registry fails CI rather than at install time. To add a pack,
+append an entry to `PACKS` in `atlas_os/packs.py` listing existing skill slugs;
+to add a skill to a pack, add its slug to that pack's `skills` tuple.
+
+---
+
 ## How skills reach sub-agents
 
 There is no separate injection step or registry call. The `Skills Catalog.md`

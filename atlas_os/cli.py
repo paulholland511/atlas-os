@@ -6,7 +6,8 @@ Subcommands:
                        scaffold the vault, install templates.
 * ``atlas doctor``   — validate the whole setup and report OK / WARN / FAIL.
 * ``atlas backends`` — show detected LLM backends; ``test`` runs an inference.
-* ``atlas skills``   — list/show/install agent skills; ``--sync`` writes the catalog
+* ``atlas skills``   — list/show/install agent skills; ``--sync`` writes the
+                       catalog; ``packs``/``install-pack`` for curated bundles
 * ``atlas embed``    — RAG pipeline           (wraps scripts/embed_vault.py)
 * ``atlas graph``    — knowledge graph        (wraps scripts/build_graph.py)
 * ``atlas commit``   — auto-commit the vault  (wraps scripts/vault_commit.py)
@@ -46,7 +47,7 @@ from dotenv import load_dotenv
 from atlas_os import __version__, audit
 from atlas_os import backends as llm_backends
 from atlas_os import fileio, gitutil
-from atlas_os import _skills
+from atlas_os import _skills, packs
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import Endpoint, detect_endpoints
 from atlas_os._skills import default_catalog_path, load_skills, render_catalog
@@ -436,6 +437,66 @@ def skills_install(
             f"{len(result.unresolved)} placeholder(s) left to fill by hand: {left}"
         )
         typer.echo(f"  edit them in {result.dest}")
+
+
+@skills_app.command("packs")
+def skills_packs() -> None:
+    """List the pre-built skill packs (curated bundles for common workflows)."""
+    items = packs.load_packs()
+    if not items:
+        _echo_warn("no packs defined")
+        raise typer.Exit()
+    typer.secho(f"\nSkill packs ({len(items)} pack(s)):\n", bold=True)
+    for pack in items:
+        typer.secho(f"  {pack.name}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f"  ({len(pack.skills)} skill(s))")
+        typer.echo(f"    {pack.description}")
+        typer.echo(f"    skills: {', '.join(pack.skills)}")
+    typer.echo("\nRun `atlas skills install-pack <name>` to install a pack.")
+
+
+@skills_app.command("install-pack")
+def skills_install_pack(
+    name: str = typer.Argument(..., help="Pack name to install."),
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite already-installed skills in the pack."
+    ),
+) -> None:
+    """Install every skill in a pack at once, filling in placeholders.
+
+    Each skill is installed exactly as ``atlas skills install`` would — copied
+    to ``$ATLAS_SKILLS_DIR/<slug>/`` (or ``$VAULT_PATH/.claude/skills/<slug>/``)
+    with its ``{{PLACEHOLDER}}`` tokens substituted from your environment / .env.
+    A skill that's already installed is skipped unless you pass ``--force``.
+    """
+    try:
+        result = packs.install_pack(name, force=force)
+    except packs.PackNotFoundError:
+        _echo_fail(f"unknown pack {name!r} — run `atlas skills packs`")
+        raise typer.Exit(code=2) from None
+    except _skills.SkillInstallError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    typer.secho(
+        f"\nPack {result.pack!r}: {len(result.installed)} installed, "
+        f"{len(result.skipped)} skipped.\n",
+        bold=True,
+    )
+    unresolved: set[str] = set()
+    for installed in result.installed:
+        verb = "reinstalled" if installed.overwrote else "installed"
+        _echo_ok(f"{verb} {installed.slug} → {installed.dest}")
+        unresolved.update(installed.unresolved)
+    for slug, reason in result.skipped:
+        _echo_warn(f"skipped {slug} — {reason}")
+
+    if unresolved:
+        left = ", ".join(sorted(unresolved))
+        _echo_warn(
+            f"{len(unresolved)} placeholder(s) left to fill by hand across the pack: {left}"
+        )
+        typer.echo("  edit each skill's SKILL.md to fill them in")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

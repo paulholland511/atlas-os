@@ -6,6 +6,13 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-06-04
+
+This release graduates two **[v2.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/2)**
+features to shipped — the SQLite vector store ([#10](https://github.com/paulholland511/atlas-os/issues/10))
+and the advanced RAG pipeline ([#11](https://github.com/paulholland511/atlas-os/issues/11)) — and
+moves session capture to a twice-daily default.
+
 ### Changed
 - **Session capture is now twice-daily by default (morning + afternoon).** Two
   new scheduled skills, **`morning-session-capture`** (~09:00) and

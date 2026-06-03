@@ -31,7 +31,7 @@ network, no secrets.
 | **Embeddings / RAG** | `atlas embed`, `atlas graph` | `pdfplumber` *(only for PDF notes — `pip install ".[pdf]"`)* | `EMBED_HOST`, `EMBED_PORT`, `EMBED_MODEL` (+ a running local LLM) |
 | **Trading research** | `atlas trading` | `yfinance` + the third-party TradingAgents package — `pip install ".[trading]"` | `LM_STUDIO_HOST`, `LM_STUDIO_PORT`, `LM_STUDIO_MODEL`, `TRADING_AGENTS_PATH`, `TRADING_TICKERS` |
 | **Email reports** | `atlas email` | — (stdlib `smtplib`) | `SENDER_EMAIL`, `SMTP_APP_PASSWORD`, `SMTP_SERVER`, `SMTP_PORT`, `USER_EMAIL` |
-| **LM Studio / Ollama** | (backs RAG + trading) | — | `EMBED_*` and/or `LM_STUDIO_*` |
+| **LLM backend** (LM Studio / Ollama / llama.cpp / OpenAI-compatible) | `atlas backends`, backs RAG + trading | — | auto-detected; `ATLAS_LLM_BACKEND`, `ATLAS_LLM_MODEL`, `*_URL`, `EMBED_*` / `LM_STUDIO_*` |
 | **Dashboard** | static HTML | — (Node.js only if you build the full app) | `DASHBOARD_FRONTEND_PORT`, `DASHBOARD_BACKEND_PORT` |
 
 Install all optional Python extras at once: `pip install -e ".[all]"`.
@@ -176,7 +176,41 @@ atlas skills          # list the catalog
 atlas skills --sync   # regenerate the catalog note in the vault
 ```
 
-## 9. Verify
+## 9. LLM backend configuration
+
+Atlas OS speaks the OpenAI-compatible API, so it works with whatever local LLM
+server you already run. It **auto-detects** a backend by probing these in order:
+
+| Order | Backend | Default base URL | URL override env var |
+|---|---|---|---|
+| 1 | LM Studio | `http://localhost:5555` | `LM_STUDIO_URL` |
+| 2 | Ollama | `http://localhost:11434` | `OLLAMA_URL` |
+| 3 | llama.cpp | `http://localhost:8080` | `LLAMACPP_URL` |
+| 4 | OpenAI-compatible | *(none — opt in)* | `OPENAI_COMPATIBLE_URL` |
+
+Inspect and test what's detected:
+
+```bash
+atlas backends         # list every backend with reachable/unreachable + models
+atlas backends test    # run a one-line inference against the active backend
+```
+
+**Forcing a backend.** To skip detection, set `ATLAS_LLM_BACKEND` to one of
+`lmstudio`, `ollama`, `llamacpp`, or `openai-compatible`. Override the chat model
+name with `ATLAS_LLM_MODEL`.
+
+```bash
+# Example: force Ollama and pick a specific model
+export ATLAS_LLM_BACKEND=ollama
+export ATLAS_LLM_MODEL=llama3.1
+atlas backends test
+```
+
+**Backward compatibility.** Explicit `EMBED_*` and `LM_STUDIO_*` variables always
+take precedence over auto-detection, so an existing LM Studio setup keeps working
+unchanged. Auto-detection only kicks in when no endpoint is configured.
+
+## 10. Verify
 
 ```bash
 atlas doctor      # quick setup validation (OK / WARN / FAIL)
@@ -185,7 +219,7 @@ atlas health      # full subsystem probe   (or: python3 scripts/health_check.py)
 
 You should see each subsystem report UP / DEGRADED / DOWN.
 
-## 10. The audit trail
+## 11. The audit trail
 
 Every autonomous action Atlas runs — `embed`, `commit`, `graph`, `changelog`,
 `health`, `trading`, `email` — appends one line to an **append-only** JSONL log.

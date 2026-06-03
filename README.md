@@ -215,6 +215,11 @@ model (e.g. `nomic-embed-text`) and a chat model, then start its local server
 (default `http://localhost:1234`). `atlas init` auto-detects it. For Ollama:
 `ollama serve` then `ollama pull nomic-embed-text`.
 
+Atlas OS works with **any** OpenAI-compatible server. It auto-detects LM Studio,
+Ollama, llama.cpp, or a custom endpoint (probed in that order) — run
+`atlas backends` to see what's reachable and `atlas backends test` to confirm
+inference. Force a specific one with `ATLAS_LLM_BACKEND=ollama`.
+
 ---
 
 ## Installation
@@ -803,8 +808,6 @@ Ideas on the table (contributions welcome):
   autonomy.
 - **`atlas skills install <name>`** — deploy a skill into the scheduled-tasks
   directory, with placeholder substitution.
-- **Pluggable backends** — first-class auto-detection across LM Studio / Ollama /
-  llama.cpp / any OpenAI-compatible endpoint.
 - **PyPI release** — `pipx install atlas-os` without the git URL.
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
 

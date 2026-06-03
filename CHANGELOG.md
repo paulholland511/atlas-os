@@ -7,6 +7,21 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Pluggable LLM backends** ([`atlas_os/backends.py`](atlas_os/backends.py)).
+  Atlas OS now auto-detects any OpenAI-compatible LLM server, probing **LM Studio
+  (`:5555`) → Ollama (`:11434`) → llama.cpp (`:8080`) → a custom
+  `OPENAI_COMPATIBLE_URL`** in that order and using the first that responds. The
+  module exposes `detect_backend()`, `get_client()`, `list_models()`, and a
+  one-shot `run_inference()` test. Two env vars override the defaults:
+  `ATLAS_LLM_BACKEND` forces a backend (`lmstudio`/`ollama`/`llamacpp`/
+  `openai-compatible`, skipping detection) and `ATLAS_LLM_MODEL` overrides the
+  chat model name. New CLI: `atlas backends` lists every backend with
+  reachability + models, and `atlas backends test` runs an end-to-end inference.
+  The RAG (`embed_vault.py`), trading (`trading_briefing.py`), and health
+  (`health_check.py`) scripts now resolve their endpoint through this module.
+  **Fully backward compatible:** explicit `EMBED_*` / `LM_STUDIO_*` settings still
+  win, so existing setups are unchanged. Covered by
+  [`tests/test_backends.py`](tests/test_backends.py).
 - **Skills catalogue & framework docs.** A
   [`docs/SKILLS-CATALOGUE.md`](docs/SKILLS-CATALOGUE.md) documenting the full menu
   of **160+ skills** — 149 capability skills across seven domains (Security,

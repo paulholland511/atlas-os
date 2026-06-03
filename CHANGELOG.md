@@ -20,6 +20,27 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pair as the recommended default.
 
 ### Added
+- **Advanced RAG pipeline — semantic chunking, hybrid search, reranking,
+  embedding cache.** A new module, [`atlas_os/rag.py`](atlas_os/rag.py), upgrades
+  every stage of retrieval, and the `atlas search` command exposes it:
+  - **Semantic chunking** splits on heading and paragraph boundaries and packs
+    whole paragraphs up to a token budget (oversized paragraphs are windowed),
+    instead of cutting at a fixed character offset mid-sentence.
+  - **Hybrid search** fuses a vector ranking and an **Okapi BM25** lexical
+    ranking with **Reciprocal Rank Fusion** — no score-scale reconciliation
+    needed — replacing the old weighted term-frequency blend.
+  - **Reranking** re-scores the fused candidates by **TF-IDF cosine** to the
+    query (a local, model-free cross-encoder substitute); never worsens fusion's
+    order when it finds no lexical signal.
+  - **Embedding cache** keyed by a `(model, text)` content hash means unchanged
+    chunks are never re-embedded — even across a full rebuild (the cache survives
+    `clear()`). Re-embedding an unchanged vault makes zero embedding calls.
+  - **Metadata filtering** narrows candidates by folder, doc_type, tag, file
+    extension, or a modified-time window *before* the vector search.
+  - **`atlas search`** (wraps [`scripts/rag_search.py`](scripts/rag_search.py)):
+    `atlas search "query" --mode hybrid|vector|keyword --folder … --tag …
+    --file-type md --since 30d --top-k N [--no-rerank] [--json]`. See
+    [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md#atlas-search).
 - **SQLite vector store — production-scale RAG (replaces `vectors.json`).** The
   RAG index now lives in a single SQLite database (`$RAG_DIR/vectors.db`) via the
   new [`atlas_os/vectordb.py`](atlas_os/vectordb.py) `VectorStore`, instead of one

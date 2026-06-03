@@ -19,6 +19,7 @@ environment variables described here are the public interface of Atlas OS. See
   - [`atlas doctor`](#atlas-doctor)
   - [`atlas health`](#atlas-health)
   - [`atlas embed`](#atlas-embed)
+  - [`atlas search`](#atlas-search)
   - [`atlas migrate-vectors`](#atlas-migrate-vectors)
   - [`atlas commit`](#atlas-commit)
   - [`atlas changelog`](#atlas-changelog)
@@ -92,6 +93,7 @@ atlas-os 0.3.0
 | [`atlas doctor`](#atlas-doctor) | Diagnose the setup by category, offer fixes (`--fix`), emit JSON (`--json`). |
 | [`atlas health`](#atlas-health) | Full subsystem health probe. |
 | [`atlas embed`](#atlas-embed) | Build / refresh the RAG vector store. |
+| [`atlas search`](#atlas-search) | Query the store: hybrid (BM25 + vector) search with reranking. |
 | [`atlas migrate-vectors`](#atlas-migrate-vectors) | Migrate a legacy `vectors.json` into the SQLite store. |
 | [`atlas commit`](#atlas-commit) | Auto-commit the vault with a categorised message. |
 | [`atlas changelog`](#atlas-changelog) | Summarise vault changes over a time window. |
@@ -303,6 +305,52 @@ atlas embed --incremental         # only changed notes
 atlas embed --test 5              # smoke-test the endpoint on 5 files
 atlas embed --folder Research     # one folder only
 atlas embed --full --batch-size 16
+```
+
+---
+
+### `atlas search`
+
+Query the RAG store from the command line. Wraps `scripts/rag_search.py`, which
+runs the advanced retrieval pipeline in [`atlas_os/rag.py`](../atlas_os/rag.py):
+semantic-chunked content, **BM25 + vector hybrid** fusion (Reciprocal Rank
+Fusion), an optional **TF-IDF rerank**, and metadata pre-filtering.
+
+**Usage**
+
+```text
+atlas search QUERY [--top-k N] [--mode hybrid|vector|keyword]
+                   [--folder NAME ...] [--doc-type TYPE ...] [--tag TAG ...]
+                   [--file-type EXT ...] [--since WHEN] [--until WHEN]
+                   [--no-rerank] [--json]
+```
+
+**Flags**
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--top-k` / `-k` | `N` | Number of results to return (default `5`). |
+| `--mode` | `MODE` | `hybrid` (default), `vector` (semantic only), or `keyword` (BM25 only — no endpoint needed). |
+| `--folder` | `NAME` | Restrict to a top-level folder (repeatable). |
+| `--doc-type` | `TYPE` | Restrict to a doc_type, e.g. `research` (repeatable). |
+| `--tag` | `TAG` | Restrict to a frontmatter tag (repeatable). |
+| `--file-type` | `EXT` | Restrict to a file extension, `md` or `pdf` (repeatable). |
+| `--since` | `WHEN` | Only chunks modified since `24h` / `7d` / `2w` / `YYYY-MM-DD`. |
+| `--until` | `WHEN` | Only chunks modified before the given window/date. |
+| `--no-rerank` | | Skip the TF-IDF rerank pass (fusion order only). |
+| `--json` | | Emit results as JSON instead of the human-readable list. |
+
+**Environment variables** — requires `VAULT_PATH`. Reads `RAG_DIR` and, for the
+query embedding, `EMBED_URL` (or `EMBED_HOST` + `EMBED_PORT`), `EMBED_MODEL`, and
+`EMBED_API_KEY`. `--mode keyword` is purely lexical and needs no endpoint.
+
+**Examples**
+
+```bash
+atlas search "kelly criterion sizing"                       # hybrid + rerank
+atlas search "trading risk" --folder research --tag trading --top-k 10
+atlas search "embeddings" --mode vector --file-type md --since 30d
+atlas search "decision log" --mode keyword --json           # offline, scriptable
 ```
 
 ---

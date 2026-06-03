@@ -145,6 +145,13 @@ class VectorStore:
             CREATE INDEX IF NOT EXISTS idx_chunks_folder ON chunks(folder);
             CREATE INDEX IF NOT EXISTS idx_chunks_doctype ON chunks(doc_type);
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+            -- Persistent embedding cache, keyed by a (model, text) content hash.
+            -- Deliberately NOT wiped by clear(), so a full re-embed reuses the
+            -- embeddings of unchanged content instead of re-calling the model.
+            CREATE TABLE IF NOT EXISTS embedding_cache (
+                content_hash TEXT PRIMARY KEY,
+                embedding    BLOB NOT NULL
+            );
             """
         )
         self._conn.commit()
@@ -361,6 +368,41 @@ class VectorStore:
             })
         scored.sort(key=lambda r: r["score"], reverse=True)
         return scored[:top_k]
+
+    # ── embedding cache ───────────────────────────────────────────────────────
+    def cached_embeddings(self, hashes: Sequence[str]) -> dict[str, list[float]]:
+        """Return the cached embeddings for the given content hashes (cache hits)."""
+        if not hashes:
+            return {}
+        placeholders = ",".join("?" for _ in hashes)
+        rows = self._conn.execute(
+            f"SELECT content_hash, embedding FROM embedding_cache "
+            f"WHERE content_hash IN ({placeholders})",
+            list(hashes),
+        ).fetchall()
+        return {r["content_hash"]: _unpack(r["embedding"]) for r in rows}
+
+    def cache_embeddings(self, items: Iterable[tuple[str, Sequence[float]]]) -> int:
+        """Store ``(content_hash, embedding)`` pairs in the persistent cache."""
+        count = 0
+        for content_hash, embedding in items:
+            self._conn.execute(
+                "INSERT INTO embedding_cache(content_hash, embedding) VALUES(?, ?) "
+                "ON CONFLICT(content_hash) DO NOTHING",
+                (content_hash, _pack(embedding)),
+            )
+            count += 1
+        self._conn.commit()
+        return count
+
+    def cache_size(self) -> int:
+        """Number of cached embeddings."""
+        return int(self._conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0])
+
+    def clear_cache(self) -> None:
+        """Empty the embedding cache (forces a clean re-embed of everything)."""
+        self._conn.execute("DELETE FROM embedding_cache")
+        self._conn.commit()
 
     # ── migration ─────────────────────────────────────────────────────────────
     @staticmethod

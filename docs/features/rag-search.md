@@ -1,12 +1,16 @@
 # Feature: Local RAG Search
 
-**Source:** [`scripts/embed_vault.py`](../../scripts/embed_vault.py) ·
-**CLI:** `atlas embed` · **Store:** `$RAG_DIR/vectors.db` (SQLite, via `atlas_os/vectordb.py`)
+**Source:** [`scripts/embed_vault.py`](../../scripts/embed_vault.py),
+[`atlas_os/rag.py`](../../atlas_os/rag.py),
+[`scripts/rag_search.py`](../../scripts/rag_search.py) ·
+**CLI:** `atlas embed`, `atlas search` ·
+**Store:** `$RAG_DIR/vectors.db` (SQLite, via `atlas_os/vectordb.py`)
 
-Atlas OS turns your markdown vault into a searchable knowledge base by chunking
-each note, embedding the chunks with a **local** OpenAI-compatible model, and
-storing the vectors in a plain JSON file on disk. Search combines vector
-similarity with keyword matching. Nothing leaves your machine.
+Atlas OS turns your markdown vault into a searchable knowledge base by
+**semantically chunking** each note, embedding the chunks with a **local**
+OpenAI-compatible model, and storing them in a **SQLite** vector store. Search is
+**hybrid** — it fuses vector similarity with BM25 lexical scoring and reranks the
+result. Nothing leaves your machine.
 
 ---
 
@@ -19,17 +23,19 @@ similarity with keyword matching. Nothing leaves your machine.
 is installed — every `.pdf` too. PDF text is extracted page-by-page; scanned or
 empty PDFs (no extractable text) are skipped with a warning.
 
-### 2. Chunking
+### 2. Semantic chunking
 
-Each document is split into **overlapping chunks** by `chunk_text()`:
+Documents are split by `atlas_os.rag.semantic_chunk()` on **structure**, not a
+fixed character window:
 
-- Target size **500 tokens**, **50-token overlap** (`CHUNK_TOKENS`,
-  `OVERLAP_TOKENS`). Tokens are approximated as `len(text) // 4` characters
-  (`CHARS_PER_TOK = 4`), so a chunk is ~2000 characters with ~200 overlap.
-- Every chunk records the **nearest preceding markdown heading** (`#`–`######`)
-  as a `heading` field, so a result can show which section it came from.
-- Chunks slide forward by `chunk_chars − overlap_chars`; the overlap preserves
-  context across boundaries.
+- Split first on **markdown heading boundaries** (`#`–`######`), then on
+  **paragraph breaks** within each section.
+- Whole paragraphs are **packed** into chunks up to a **500-token** budget
+  (`CHUNK_TOKENS`), with **50-token overlap** (`OVERLAP_TOKENS`) carried across
+  the boundary; tokens are approximated as `len(text) // 4` characters. A
+  paragraph larger than the hard cap is windowed as a fallback.
+- Every chunk records its **nearest heading**, so results show which section
+  they came from, and no chunk is ever cut mid-sentence.
 
 ### 3. Metadata
 
@@ -55,6 +61,10 @@ For each chunk, the pipeline attaches:
   rate-limit responses; a 0.05s delay between calls.
 - **Auth optional** — sends `Authorization: Bearer $EMBED_API_KEY` only if the
   key is set (local servers usually need none).
+- **Cached** — every embedding is cached in `vectors.db` keyed by a
+  `(model, text)` hash, so unchanged chunks are **never re-embedded** — even on a
+  full rebuild (the cache survives `clear()`). Re-embedding an unchanged vault
+  makes zero embedding calls.
 
 Each embedded chunk becomes a row in the SQLite store, carrying the same fields:
 
@@ -116,23 +126,39 @@ incremental selection.
 
 ---
 
-## Search
+## Search (`atlas search`)
 
-`search(query, top_k=5, mode="hybrid", filters=None)` supports three modes:
+Query the store from the CLI via [`scripts/rag_search.py`](../../scripts/rag_search.py),
+which runs the advanced pipeline in [`atlas_os/rag.py`](../../atlas_os/rag.py).
+Three modes:
 
-- **`vector`** — embed the query, rank all chunks by **cosine similarity**.
-- **`keyword`** — term-frequency of the query words in each chunk, normalised to
-  0–1.
-- **`hybrid`** (default) — take the top 20 from each, then combine:
-  **`score = 0.7 × vector + 0.3 × keyword`**, re-rank, return `top_k`.
+- **`vector`** — embed the query, rank by **cosine similarity** (the `sqlite-vec`
+  KNN index, or a brute-force scan when unfiltered).
+- **`keyword`** — **Okapi BM25** lexical scoring (term saturation + length
+  normalisation). Needs no embeddings endpoint.
+- **`hybrid`** (default) — fuse the vector and BM25 rankings with **Reciprocal
+  Rank Fusion** (merge by *rank*, so the two score scales never need
+  reconciling), then **rerank** the fused candidates by **TF-IDF cosine** to the
+  query (a local, model-free cross-encoder substitute). `--no-rerank` returns the
+  fusion order directly.
 
-**Filters.** Pass terms that must *all* match a chunk's `folder`, `doc_type`, or
-`tags` (e.g. restrict to `research` notes tagged `rag`).
+**Metadata filtering** (applied *before* ranking): `--folder`, `--doc-type`,
+`--tag`, `--file-type` (all repeatable, "any of" within a criterion, AND across
+criteria), plus a `--since` / `--until` modified-time window (`24h`/`7d`/`2w`/
+`YYYY-MM-DD`).
 
-> The shipped script focuses on building the store; the `search()` function is
-> the programmatic entry point used by tooling/skills. The Obsidian RAG search
-> CLI referenced in the user `CLAUDE.md` (`obsidian-search.sh`) is one such
-> consumer.
+```bash
+atlas search "kelly criterion sizing"                       # hybrid + rerank
+atlas search "trading risk" --folder research --tag trading --top-k 10
+atlas search "embeddings" --mode vector --file-type md --since 30d
+atlas search "decision log" --mode keyword --json           # offline, scriptable
+```
+
+Programmatically, `embed_vault.search(query, top_k, mode, filters, rerank)` is the
+simple entry point and `embed_vault.advanced_search(...)` adds the rich date /
+file-type filtering. The building blocks (`semantic_chunk`, `BM25`,
+`reciprocal_rank_fusion`, `tfidf_rerank`, `filter_chunks`) live in
+[`atlas_os/rag.py`](../../atlas_os/rag.py).
 
 ---
 
@@ -156,11 +182,13 @@ vault.
 
 ## Tuning & extending
 
-- **Chunk size / overlap** — edit `CHUNK_TOKENS` / `OVERLAP_TOKENS`.
+- **Chunk size / overlap** — edit `CHUNK_TOKENS` / `OVERLAP_TOKENS` (passed to
+  `semantic_chunk`).
 - **Folder → doc_type** — edit `DOC_TYPE_MAP` to match your vault's folders.
 - **Throughput** — raise `--batch-size` if your endpoint handles it; lower
   `INTER_CALL_DELAY` for local servers.
-- **Hybrid weighting** — change the `0.7 / 0.3` split in `search()`.
+- **BM25 parameters** — tune `k1` / `b` in `atlas_os.rag.BM25`; adjust the RRF
+  `k` or swap the reranker in `atlas_os.rag`.
 
 ## Troubleshooting
 

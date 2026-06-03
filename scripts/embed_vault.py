@@ -40,7 +40,7 @@ import requests
 from _bootstrap import ensure_atlas_os
 
 ensure_atlas_os()
-from atlas_os import netio, vectordb  # noqa: E402
+from atlas_os import netio, rag, vectordb  # noqa: E402
 from atlas_os import retry as retrylib  # noqa: E402
 from atlas_os import scriptkit  # noqa: E402
 
@@ -182,43 +182,17 @@ def get_doc_type(folder: str) -> str:
 
 
 def chunk_text(text: str, filename: str) -> list[dict]:
+    """Split text into semantic chunks, each carrying its nearest heading.
+
+    Delegates to :func:`atlas_os.rag.semantic_chunk`, which splits on heading and
+    paragraph boundaries and packs whole paragraphs up to the token budget
+    instead of cutting at a fixed character offset. ``file`` is made relative to
+    the vault root.
     """
-    Split text into overlapping chunks. Each chunk carries the nearest
-    preceding heading as context.
-    """
-    chunk_chars   = CHUNK_TOKENS   * CHARS_PER_TOK
-    overlap_chars = OVERLAP_TOKENS * CHARS_PER_TOK
-
-    heading_re = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
-    headings = [(m.start(), m.group(2).strip()) for m in heading_re.finditer(text)]
-
-    def heading_at(pos: int) -> str:
-        h = ""
-        for offset, title in headings:
-            if offset <= pos:
-                h = title
-            else:
-                break
-        return h
-
-    chunks = []
-    start  = 0
-    length = len(text)
-
-    while start < length:
-        end  = min(start + chunk_chars, length)
-        body = text[start:end].strip()
-        if body:
-            chunks.append({
-                "file":       str(Path(filename).relative_to(VAULT_DIR)),
-                "heading":    heading_at(start),
-                "chunk_text": body,
-            })
-        if end >= length:
-            break
-        start = end - overlap_chars
-
-    return chunks
+    return rag.semantic_chunk(
+        text, filename, VAULT_DIR,
+        target_tokens=CHUNK_TOKENS, overlap_tokens=OVERLAP_TOKENS,
+    )
 
 
 # ── PDF extraction ────────────────────────────────────────────────────────────
@@ -495,8 +469,21 @@ def chunk_matches_filters(v: dict, filters: list[str]) -> bool:
 
 
 def search(query: str, top_k: int = 5, mode: str = "hybrid",
-           filters: list[str] | None = None) -> list[dict]:
-    # Keyword mode is pure text scoring — no embedding call, no vector index.
+           filters: list[str] | None = None, rerank: bool = True) -> list[dict]:
+    """Retrieve the ``top_k`` chunks for ``query``.
+
+    Modes:
+
+    * ``keyword`` — BM25 lexical scoring only (no embedding call).
+    * ``vector`` — semantic similarity via the store's KNN index.
+    * ``hybrid`` (default) — fuse the vector and BM25 rankings with Reciprocal
+      Rank Fusion, then (optionally) rerank the fused candidates by TF-IDF cosine
+      to the query.
+
+    ``filters`` is a list of folder / doc_type / tag terms, all of which must
+    match. See :func:`scripts.rag_search` for richer date / file-type filtering.
+    """
+    # Keyword mode is pure lexical scoring — no embedding call, no vector index.
     if mode == "keyword":
         vectors = load_vectors()
         if not vectors:
@@ -507,7 +494,7 @@ def search(query: str, top_k: int = 5, mode: str = "hybrid",
             if not vectors:
                 print(f"No chunks matched filters: {filters}")
                 return []
-        return keyword_search(query, vectors, top_k=top_k)
+        return rag.bm25_search(query, vectors, top_k=top_k)
 
     q_vec = embed([query])[0]
     store = open_store()
@@ -525,37 +512,71 @@ def search(query: str, top_k: int = 5, mode: str = "hybrid",
         if mode == "vector":
             return top_vec[:top_k]
 
-        # Hybrid: blend the vector ranking with a keyword ranking over the same
-        # (optionally filtered) candidate set.
+        # Hybrid: BM25 over the same (optionally filtered) candidate set.
         chunks = store.all_chunks()
         if filters:
             chunks = [c for c in chunks if chunk_matches_filters(c, filters)]
-        top_kw = keyword_search(query, chunks, top_k=20)
+        top_kw = rag.bm25_search(query, chunks, top_k=max(top_k, 20))
     finally:
         store.close()
 
-    def chunk_key(r: dict) -> str:
-        return f"{r['file']}::{r['heading']}::{r['text'][:50]}"
+    # Fuse the two rankings by rank (RRF), then optionally rerank by TF-IDF.
+    fused = rag.reciprocal_rank_fusion([top_vec, top_kw], top_k=max(top_k, 20))
+    if rerank:
+        return rag.tfidf_rerank(query, fused, top_k=top_k)
+    return fused[:top_k]
 
-    vec_map: dict[str, float] = {chunk_key(r): r["score"] for r in top_vec}
-    kw_map:  dict[str, float] = {chunk_key(r): r["score"] for r in top_kw}
-    chunk_lookup: dict[str, dict] = {chunk_key(r): r for r in top_vec}
-    for r in top_kw:
-        chunk_lookup.setdefault(chunk_key(r), r)
 
-    hybrid = []
-    for k, chunk in chunk_lookup.items():
-        v_score  = vec_map.get(k, 0.0)
-        kw_score = kw_map.get(k, 0.0)
-        hybrid.append({
-            "file":    chunk["file"],
-            "heading": chunk["heading"],
-            "text":    chunk["text"],
-            "score":   0.7 * v_score + 0.3 * kw_score,
-        })
+def advanced_search(
+    query: str,
+    top_k: int = 5,
+    mode: str = "hybrid",
+    *,
+    folders: list[str] | None = None,
+    doc_types: list[str] | None = None,
+    tags: list[str] | None = None,
+    file_types: list[str] | None = None,
+    since: float | None = None,
+    until: float | None = None,
+    rerank: bool = True,
+) -> list[dict]:
+    """Search with rich metadata pre-filtering, then hybrid retrieval + rerank.
 
-    hybrid.sort(key=lambda x: x["score"], reverse=True)
-    return hybrid[:top_k]
+    Unlike :func:`search`, this loads the candidate set and narrows it with
+    :func:`atlas_os.rag.filter_chunks` (folder / doc_type / tag / file extension /
+    modified-time window) *before* ranking — filters the vector index can't
+    express. Ranking is the same hybrid pipeline: vector + BM25 fused by RRF, then
+    an optional TF-IDF rerank. This backs the ``atlas search`` utility.
+    """
+    store = open_store()
+    try:
+        candidates = store.all_chunks(with_embedding=True)
+    finally:
+        store.close()
+    if not candidates:
+        print("No vectors found. Run embed_vault.py --full first.")
+        return []
+
+    candidates = rag.filter_chunks(
+        candidates, folders=folders, doc_types=doc_types, tags=tags,
+        file_types=file_types, since=since, until=until,
+    )
+    if not candidates:
+        return []
+
+    if mode == "keyword":
+        return rag.bm25_search(query, candidates, top_k=top_k)
+
+    q_vec = embed([query])[0]
+    top_vec = rag.vector_rank(q_vec, candidates, top_k=max(top_k, 20))
+    if mode == "vector":
+        return top_vec[:top_k]
+
+    top_kw = rag.bm25_search(query, candidates, top_k=max(top_k, 20))
+    fused = rag.reciprocal_rank_fusion([top_vec, top_kw], top_k=max(top_k, 20))
+    if rerank:
+        return rag.tfidf_rerank(query, fused, top_k=top_k)
+    return fused[:top_k]
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -668,23 +689,46 @@ def run_embed(mode: str, test_limit: int = 0, folder_filter: str = "",
 
     t0 = time.time()
     embedded = 0
+    cache_hits = 0
     files_completed_this_run: set[str] = set()
     i = 0
 
     for batch_start in range(0, total_chunks, batch_size):
         batch = all_chunks[batch_start:batch_start + batch_size]
         batch_texts = [c["chunk_text"] for c in batch]
+        batch_hashes = [rag.content_hash(t, EMBED_MODEL) for t in batch_texts]
+
+        # Embedding cache: reuse vectors for chunks whose (model, text) we've
+        # already embedded, and only call the endpoint for the misses.
+        cached = store.cached_embeddings(batch_hashes)
+        miss_idx = [j for j, h in enumerate(batch_hashes) if h not in cached]
+        hits = len(batch) - len(miss_idx)
+
         print(
             f"Embedding {batch_start + 1}–{batch_start + len(batch)}/{total_chunks}: "
-            f"{batch[0]['file']}"
+            f"{batch[0]['file']}" + (f" ({hits} cached)" if hits else "")
         )
-        try:
-            vecs = embed(batch_texts)
-        except Exception as e:
-            print(f"  ERROR embedding batch {batch_start + 1}-{batch_start + len(batch)}: {e}",
-                  file=sys.stderr)
-            i += len(batch)
-            continue
+
+        miss_vecs: list[list[float]] = []
+        if miss_idx:
+            try:
+                miss_vecs = embed([batch_texts[j] for j in miss_idx])
+            except Exception as e:
+                print(f"  ERROR embedding batch {batch_start + 1}-{batch_start + len(batch)}: {e}",
+                      file=sys.stderr)
+                i += len(batch)
+                continue
+            store.cache_embeddings(
+                (batch_hashes[j], vec) for j, vec in zip(miss_idx, miss_vecs)
+            )
+
+        # Reassemble vectors in batch order from cache hits + fresh misses.
+        miss_iter = iter(miss_vecs)
+        vecs = [
+            cached[h] if h in cached else next(miss_iter)
+            for h in batch_hashes
+        ]
+        cache_hits += hits
 
         batch_entries: list[dict] = []
         for chunk, vec in zip(batch, vecs):
@@ -730,6 +774,8 @@ def run_embed(mode: str, test_limit: int = 0, folder_filter: str = "",
     print(f"\nDone in {elapsed:.1f}s")
     print(f"  Files embedded : {len(files)}")
     print(f"  Chunks created : {total_chunks}")
+    if cache_hits:
+        print(f"  Cache hits     : {cache_hits} (skipped re-embedding)")
     print(f"  Total vectors  : {total_vectors}")
 
     if mode in ("full", "incremental") and not test_limit and not folder_filter and not pdfs_only:

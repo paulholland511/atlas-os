@@ -52,6 +52,7 @@ The flags below are identical whether you call `atlas <cmd>` or the script.
 | Script | One-liner |
 |---|---|
 | [`scripts/embed_vault.py`](#embed_vaultpy) | Chunk + embed the vault into a local RAG vector store |
+| [`scripts/rag_search.py`](#rag_searchpy) | Query the store: hybrid (BM25 + vector) search with reranking |
 | [`scripts/build_graph.py`](#build_graphpy) | Build the wikilink knowledge graph |
 | [`scripts/vault_commit.py`](#vault_commitpy) | Auto-commit the vault with a categorised message |
 | [`scripts/vault_changelog.py`](#vault_changelogpy) | Summarise what changed in the vault over a window |
@@ -103,7 +104,38 @@ python3 scripts/embed_vault.py --full --checkpoint-interval 50 --batch-size 16
 `EMBED_URL`, `EMBED_MODEL`, `EMBED_API_KEY`.
 **Writes:** `$RAG_DIR/vectors.db`, `$RAG_DIR/graph.json` (after `--full`),
 `$RAG_DIR/last_embed.txt`.
-**Needs:** a running embeddings endpoint.
+**Needs:** a running embeddings endpoint. Chunking is **semantic** (splits on
+heading/paragraph boundaries via [`atlas_os/rag.py`](../atlas_os/rag.py)), and an
+**embedding cache** keyed by `(model, text)` skips re-embedding unchanged chunks
+across runs — including full rebuilds.
+
+---
+
+## `rag_search.py`
+
+Query the RAG store from the command line (also exposed as `atlas search`). Runs
+the advanced retrieval pipeline in [`atlas_os/rag.py`](../atlas_os/rag.py):
+**BM25 + vector hybrid** fusion (Reciprocal Rank Fusion), an optional **TF-IDF
+rerank**, and metadata pre-filtering by folder, doc_type, tag, file type, and a
+modified-time window.
+
+**Usage**
+
+```bash
+python3 scripts/rag_search.py "kelly criterion sizing"           # hybrid + rerank
+python3 scripts/rag_search.py "trading risk" --folder research --tag trading -k 10
+python3 scripts/rag_search.py "embeddings" --mode vector --file-type md --since 30d
+python3 scripts/rag_search.py "decision log" --mode keyword --json    # offline
+```
+
+**Modes:** `hybrid` (default), `vector` (semantic only), `keyword` (BM25 only —
+needs no endpoint). **Filters:** `--folder`, `--doc-type`, `--tag`,
+`--file-type` (all repeatable), `--since` / `--until` (`24h`/`7d`/`2w`/date).
+**Other:** `-k/--top-k N`, `--no-rerank`, `--json`.
+
+**Reads:** `VAULT_PATH` (required), `RAG_DIR`, and the `EMBED_*` vars for the
+query embedding (not needed in `--mode keyword`).
+**Needs:** a running embeddings endpoint, except in keyword mode.
 
 ---
 

@@ -223,6 +223,19 @@ def embed(ctx: typer.Context) -> None:
                  _context_for("embed", ctx.args))
 
 
+@app.command(context_settings=_PASSTHROUGH)
+def search(ctx: typer.Context) -> None:
+    """Query the RAG store: hybrid (BM25 + vector) search with reranking.
+
+    Wraps scripts/rag_search.py. Pass a query plus optional filters, e.g.
+    `atlas search "kelly criterion" --folder research --tag trading --top-k 10`.
+    Modes: --mode hybrid|vector|keyword. See `atlas search --help` via the script
+    for the full flag list (--file-type, --since, --until, --no-rerank, --json).
+    """
+    _require_env("VAULT_PATH")
+    _run(scripts_dir() / "rag_search.py", ctx.args)
+
+
 @app.command(name="migrate-vectors")
 def migrate_vectors(
     rag_dir: Path = typer.Option(

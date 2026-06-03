@@ -236,9 +236,11 @@ Eleven composable systems, each usable on its own:
 2. **Knowledge vault** — a folder of markdown notes (Obsidian-friendly) where
    top-level folders carry meaning and per-folder YAML frontmatter is kept
    consistent automatically. See [the vault](#the-knowledge-vault).
-3. **Local RAG search** — chunk + embed your notes via a local LLM into a hybrid
-   (vector + keyword) index stored in a SQLite vector store (`.rag/vectors.db`),
-   accelerated by `sqlite-vec` with a pure-Python fallback.
+3. **Local RAG search** — semantic-chunk + embed your notes via a local LLM into
+   a SQLite vector store (`.rag/vectors.db`, `sqlite-vec`-accelerated with a
+   pure-Python fallback). **Hybrid** retrieval fuses BM25 + vector ranking and
+   reranks the result; query it with `atlas search`. See
+   [RAG search](#rag-search--knowledge-graph).
 4. **Pluggable LLM backends** — bring whatever OpenAI-compatible server you run.
    Atlas OS auto-detects LM Studio, Ollama, llama.cpp, or any custom endpoint
    (probed in that order), with `ATLAS_LLM_BACKEND` to force one. Inspect with
@@ -684,6 +686,28 @@ file, per batch), so a full run **checkpoints** and an interrupted embed resumes
 rather than starting over — and never corrupts the index with a half-written
 rewrite.
 
+**Advanced retrieval ([`atlas_os/rag.py`](atlas_os/rag.py)).** The pipeline uses
+production-grade IR at every stage:
+
+- **Semantic chunking** splits on heading/paragraph boundaries (whole paragraphs
+  up to a token budget) instead of fixed character windows.
+- **Hybrid search** fuses the vector ranking with an **Okapi BM25** lexical
+  ranking via **Reciprocal Rank Fusion**, then **reranks** by TF-IDF cosine to
+  the query.
+- **Embedding cache** (keyed by `(model, text)` hash) skips re-embedding
+  unchanged chunks — even across a full rebuild.
+- **Metadata filtering** by folder, doc_type, tag, file type, or date window
+  *before* the vector search.
+
+**Search (`atlas search`).** Query the store from the CLI:
+
+```bash
+atlas search "kelly criterion sizing"                 # hybrid + rerank, top 5
+atlas search "trading risk" --folder research --tag trading --top-k 10
+atlas search "embeddings" --mode vector --file-type md --since 30d
+atlas search "kelly" --mode keyword                   # BM25 only (no endpoint)
+```
+
 **Knowledge graph (`atlas graph`).** Walks every note, resolves `[[wikilinks]]`,
 and writes `$RAG_DIR/graph.json` with nodes, edges, adjacency, and backlinks —
 the basis for "related notes" and the dashboard's graph view. It's rebuilt
@@ -1007,9 +1031,9 @@ the next-generation Atlas OS (contributions welcome):
 - ✅ **SQLite vector store** ([#10](https://github.com/paulholland511/atlas-os/issues/10)) —
   production-scale RAG: `vectors.db` with `sqlite-vec` KNN, incremental
   insert/delete, and a graceful brute-force fallback. *Shipped.*
-- 🚧 **Advanced RAG pipeline** ([#11](https://github.com/paulholland511/atlas-os/issues/11)) —
-  semantic chunking, hybrid BM25 + vector search, reranking, embedding cache,
-  metadata filtering.
+- ✅ **Advanced RAG pipeline** ([#11](https://github.com/paulholland511/atlas-os/issues/11)) —
+  semantic chunking, hybrid BM25 + vector search, TF-IDF reranking, embedding
+  cache, metadata filtering, and the `atlas search` command. *Shipped.*
 - **Open-source lightweight dashboard** ([#12](https://github.com/paulholland511/atlas-os/issues/12)) —
   health, audit trail, scheduled-task status, skill management, backend status.
 - **Skills marketplace / registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)) —
@@ -1023,9 +1047,9 @@ Further out:
   once published, `pipx install atlas-os` works without the git URL.
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
 
-Recently shipped: the SQLite vector store (above), an append-only audit trail,
-and `atlas skills install` for one-command skill deployment with placeholder
-substitution.
+Recently shipped: the SQLite vector store and the advanced RAG pipeline (above),
+an append-only audit trail, and `atlas skills install` for one-command skill
+deployment with placeholder substitution.
 
 ---
 

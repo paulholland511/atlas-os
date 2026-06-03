@@ -147,6 +147,47 @@ class TestMigration:
         store.close()
 
 
+class TestEmbeddingCache:
+    def test_round_trip(self, tmp_path: Path) -> None:
+        s = vectordb.VectorStore(tmp_path / "v.db")
+        s.cache_embeddings([("h1", [0.1, 0.2]), ("h2", [0.3, 0.4])])
+        assert s.cache_size() == 2
+        got = s.cached_embeddings(["h1", "h2", "missing"])
+        assert set(got) == {"h1", "h2"}
+        assert got["h1"] == pytest.approx([0.1, 0.2])
+        s.close()
+
+    def test_insert_is_idempotent(self, tmp_path: Path) -> None:
+        s = vectordb.VectorStore(tmp_path / "v.db")
+        s.cache_embeddings([("h1", [0.1, 0.2])])
+        s.cache_embeddings([("h1", [9.9, 9.9])])  # same key — first write wins
+        assert s.cache_size() == 1
+        assert s.cached_embeddings(["h1"])["h1"] == pytest.approx([0.1, 0.2])
+        s.close()
+
+    def test_cache_survives_clear(self, tmp_path: Path) -> None:
+        # The whole point: a full re-embed (clear) must not drop the cache.
+        s = vectordb.VectorStore(tmp_path / "v.db")
+        s.add_vectors(_entries())
+        s.cache_embeddings([("h1", [0.1, 0.2])])
+        s.clear()
+        assert s.count() == 0
+        assert s.cache_size() == 1
+        s.close()
+
+    def test_clear_cache(self, tmp_path: Path) -> None:
+        s = vectordb.VectorStore(tmp_path / "v.db")
+        s.cache_embeddings([("h1", [0.1, 0.2])])
+        s.clear_cache()
+        assert s.cache_size() == 0
+        s.close()
+
+    def test_empty_lookup(self, tmp_path: Path) -> None:
+        s = vectordb.VectorStore(tmp_path / "v.db")
+        assert s.cached_embeddings([]) == {}
+        s.close()
+
+
 def test_persists_across_reopen(tmp_path: Path) -> None:
     db = tmp_path / "vectors.db"
     s1 = vectordb.VectorStore(db)

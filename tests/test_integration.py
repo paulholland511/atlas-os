@@ -173,6 +173,65 @@ def test_migrate_vectors_imports_legacy_json(
     assert "already has" in again.output
 
 
+def test_embedding_cache_reused_on_reembed(
+    sample_vault: Path,
+    llm_server: Callable[..., str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second `atlas embed --full` reuses cached embeddings (no re-embed)."""
+    from atlas_os import vectordb
+
+    _embed_env(monkeypatch, llm_server())
+
+    first = runner.invoke(app, ["embed", "--full"])
+    assert first.exit_code == 0, first.output
+
+    db_file = sample_vault / ".rag" / "vectors.db"
+    store = vectordb.VectorStore(db_file)
+    try:
+        # Each distinct chunk text is cached once; the sample notes are one chunk
+        # apiece, so the cache holds one entry per vector.
+        assert store.cache_size() == store.count() > 0
+    finally:
+        store.close()
+
+    # Re-embedding the unchanged vault hits the cache for every chunk.
+    second = runner.invoke(app, ["embed", "--full"])
+    assert second.exit_code == 0, second.output
+    assert "cached" in second.output.lower()
+
+
+def test_search_command_runs_end_to_end(
+    sample_vault: Path,
+    llm_server: Callable[..., str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`atlas search` embeds the query and returns JSON results over the store."""
+    import os
+    import subprocess
+    import sys
+
+    _embed_env(monkeypatch, llm_server())
+    assert runner.invoke(app, ["embed", "--full"]).exit_code == 0
+
+    # `atlas search` shells out (uncaptured by CliRunner), so drive the script
+    # directly to assert on its JSON output. monkeypatch.setenv already mutated
+    # os.environ, so the child inherits VAULT_PATH / RAG_DIR / EMBED_*.
+    script = Path(__file__).resolve().parent.parent / "scripts" / "rag_search.py"
+    proc = subprocess.run(
+        [sys.executable, str(script), "kelly criterion", "--json", "--top-k", "3"],
+        env=os.environ.copy(), capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert isinstance(payload, list)
+    for entry in payload:
+        assert {"file", "score"} <= set(entry)
+
+    # The CLI wiring (`atlas search`) at least runs cleanly against the store.
+    assert runner.invoke(app, ["search", "kelly", "--mode", "keyword"]).exit_code == 0
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 3. Commit cycle
 # ──────────────────────────────────────────────────────────────────────────────

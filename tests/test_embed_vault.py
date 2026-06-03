@@ -128,3 +128,71 @@ def test_search_keyword_mode_uses_loaded_vectors(monkeypatch) -> None:
     monkeypatch.setattr(embed_vault, "load_vectors", lambda: fake_vectors)
     results = embed_vault.search("kelly", top_k=2, mode="keyword")
     assert results[0]["file"] == "a.md"
+
+
+def _populate_store(tmp_path, monkeypatch) -> None:
+    """Point embed_vault at a temp RAG dir and seed a small store."""
+    monkeypatch.setattr(embed_vault, "RAG_DIR", tmp_path)
+    store = embed_vault.open_store()
+    store.add_vectors([
+        {"id": "a::1", "file": "research/a.md", "chunk_text": "kelly criterion bet sizing",
+         "heading": "Kelly", "embedding": [1.0, 0.0, 0.0],
+         "folder": "research", "doc_type": "research", "tags": ["trading"]},
+        {"id": "b::1", "file": "wiki/b.pdf", "chunk_text": "totally unrelated content",
+         "heading": "", "embedding": [0.0, 1.0, 0.0],
+         "folder": "wiki", "doc_type": "pdf", "tags": ["ref"]},
+        {"id": "c::1", "file": "research/c.md", "chunk_text": "kelly sizing revisited",
+         "heading": "", "embedding": [0.9, 0.1, 0.0],
+         "folder": "research", "doc_type": "research", "tags": ["trading"]},
+    ])
+    store.close()
+
+
+class TestHybridSearch:
+    def test_hybrid_ranks_relevant_first(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        monkeypatch.setattr(embed_vault, "embed", lambda texts: [[1.0, 0.0, 0.0]])
+        results = embed_vault.search("kelly criterion", top_k=3, mode="hybrid")
+        assert results[0]["file"] == "research/a.md"  # vector + lexical match
+        assert results[0].get("rerank_score") is not None  # rerank ran
+
+    def test_vector_mode_uses_knn(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        monkeypatch.setattr(embed_vault, "embed", lambda texts: [[1.0, 0.0, 0.0]])
+        results = embed_vault.search("anything", top_k=2, mode="vector")
+        assert results[0]["file"] == "research/a.md"
+        assert "rerank_score" not in results[0]  # vector mode doesn't rerank
+
+    def test_no_rerank_flag(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        monkeypatch.setattr(embed_vault, "embed", lambda texts: [[1.0, 0.0, 0.0]])
+        results = embed_vault.search("kelly", top_k=3, mode="hybrid", rerank=False)
+        assert results and "rerank_score" not in results[0]
+
+
+class TestAdvancedSearch:
+    def test_file_type_filter(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        monkeypatch.setattr(embed_vault, "embed", lambda texts: [[1.0, 0.0, 0.0]])
+        results = embed_vault.advanced_search(
+            "kelly", top_k=5, mode="vector", file_types=["md"]
+        )
+        assert results
+        assert all(r["file"].endswith(".md") for r in results)
+
+    def test_folder_filter_keyword_mode_needs_no_endpoint(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        # mode=keyword must not call embed() at all.
+        def _boom(texts):  # pragma: no cover - asserts it is never called
+            raise AssertionError("embed() should not be called in keyword mode")
+        monkeypatch.setattr(embed_vault, "embed", _boom)
+        results = embed_vault.advanced_search(
+            "kelly", top_k=5, mode="keyword", folders=["research"]
+        )
+        assert results
+        assert all(r["file"].startswith("research/") for r in results)
+
+    def test_empty_filter_result(self, tmp_path, monkeypatch) -> None:
+        _populate_store(tmp_path, monkeypatch)
+        monkeypatch.setattr(embed_vault, "embed", lambda texts: [[1.0, 0.0, 0.0]])
+        assert embed_vault.advanced_search("kelly", tags=["nonexistent"]) == []

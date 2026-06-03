@@ -7,6 +7,22 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **End-to-end integration test suite.** A new
+  [`tests/test_integration.py`](tests/test_integration.py) drives the real
+  `atlas` CLI through Typer's `CliRunner` and exercises the pipelines as a user
+  would — no mocked internals. Commands that wrap a script genuinely shell out to
+  a subprocess; only the truly external dependencies (the LLM endpoint and SMTP)
+  are stubbed, and those with **real local sockets** (a background
+  OpenAI-compatible HTTP server, a refused SMTP port) so the child processes see
+  them. The ten scenarios cover the full surface: `init → doctor`, the embed
+  pipeline writing `vectors.json`, the git `commit` cycle, `changelog`
+  generation, `skills list → install` with placeholder substitution, the audit
+  trail round-trip, `health --json` structure, multi-backend detection, email
+  graceful-failure paths, and a `init → embed → commit → changelog → audit` full
+  lifecycle. New shared fixtures in [`tests/conftest.py`](tests/conftest.py)
+  (`sample_vault`, `git_vault`, `llm_server`) build throwaway vaults and mock
+  endpoints. Tests are marked `@pytest.mark.integration` so they can be run or
+  skipped on their own (`pytest -m integration` / `pytest -m "not integration"`).
 - **Interactive `atlas init` wizard.** First-run onboarding is now a guided,
   colourful wizard rather than hand-editing `.env`. It opens with a short
   explanation of what Atlas OS is, then: (1) suggests a **smart vault default**

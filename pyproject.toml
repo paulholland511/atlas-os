@@ -91,3 +91,6 @@ line-length = 100
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "integration: end-to-end tests that drive the real CLI and pipeline scripts (deselect with '-m \"not integration\"')",
+]

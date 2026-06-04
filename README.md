@@ -21,6 +21,8 @@
 [![No telemetry](https://img.shields.io/badge/telemetry-none-brightgreen.svg)](SECURITY.md)
 [![Docs](https://img.shields.io/badge/docs-complete-informational.svg)](docs/README.md)
 
+![Atlas OS demo](demo.gif)
+
 ### ✅ Already built and shipping
 
 Everything below is **in the box today** — not roadmap, not "coming soon":

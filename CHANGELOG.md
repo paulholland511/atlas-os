@@ -6,6 +6,32 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Skills marketplace / community registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)).
+  A new module, [`atlas_os/marketplace.py`](atlas_os/marketplace.py), turns skills
+  from files in this repo into something shareable across installs:
+  - **Registries** — a JSON document (`registry.json`) listing skills with
+    metadata (name, version, description, author, tags, dependencies, download
+    URL). The built-in registry ([`skills/registry.json`](skills/registry.json))
+    ships with every install and is always searched.
+  - **`atlas skills search [QUERY]`** — search every configured registry by
+    keyword or tag (matches name, description, and tags), de-duplicated by name;
+    an unreachable registry is reported and skipped, never aborting the search.
+  - **`atlas skills publish PATH`** — validate a skill folder against the schema
+    (required fields, valid slug/semver, well-formed tags & dependencies) and
+    package it into a `<name>-<version>.tar.gz` with a generated `manifest.json`.
+  - **`atlas skills registry add URL` / `list`** — register and list custom
+    registries (a URL or a local path) alongside the built-in one; config lives
+    in `$VAULT_PATH/.atlas/registries.json` (override with `ATLAS_REGISTRIES_PATH`).
+  - **Dependency resolution** — a skill may declare `dependencies` on other
+    skills; `SkillRegistry.resolve_dependencies` returns the install order
+    (dependencies first) and detects missing dependencies and cycles.
+  - As with packs, every built-in registry entry must resolve to a real skill
+    under `skills/` — `marketplace.validate_builtin_registry()` enforces this and
+    the test-suite asserts it. New tests in
+    [`tests/test_marketplace.py`](tests/test_marketplace.py); docs in
+    [`docs/features/skills-marketplace.md`](docs/features/skills-marketplace.md).
+
 ## [1.2.0] — 2026-06-04
 
 This release graduates two **[v2.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/2)**

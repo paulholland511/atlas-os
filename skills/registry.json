@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "name": "Atlas OS Built-in Skills",
+  "description": "The skills that ship with Atlas OS \u2014 vault management, session capture, email reports, trading research, and job-search automation.",
+  "skills": [
+    {
+      "name": "afternoon-job-tracker-update",
+      "version": "1.0.0",
+      "description": "Afternoon email scan for job-application updates \u2014 catches later emails and updates the tracker spreadsheet.",
+      "author": "Atlas OS",
+      "tags": [
+        "job-search",
+        "email",
+        "spreadsheet",
+        "automation"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/afternoon-job-tracker-update"
+    },
+    {
+      "name": "afternoon-session-capture",
+      "version": "1.0.0",
+      "description": "Afternoon capture of the day's Cowork chat transcripts into the vault as session-log notes.",
+      "author": "Atlas OS",
+      "tags": [
+        "session-capture",
+        "vault",
+        "automation"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/afternoon-session-capture"
+    },
+    {
+      "name": "atlas-daily-report-email",
+      "version": "1.0.0",
+      "description": "Daily morning report email \u2014 job-search status, system health, and action items.",
+      "author": "Atlas OS",
+      "tags": [
+        "email",
+        "report",
+        "daily",
+        "health"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/atlas-daily-report-email"
+    },
+    {
+      "name": "daily-job-tracker-update",
+      "version": "1.0.0",
+      "description": "Morning email scan for job-application updates \u2014 new applications, rejections, interviews, shortlists \u2014 and update a tracker spreadsheet.",
+      "author": "Atlas OS",
+      "tags": [
+        "job-search",
+        "email",
+        "spreadsheet",
+        "automation"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/daily-job-tracker-update"
+    },
+    {
+      "name": "daily-session-capture",
+      "version": "1.0.0",
+      "description": "Nightly capture of the day's Cowork chat transcripts into the vault as session-log notes.",
+      "author": "Atlas OS",
+      "tags": [
+        "session-capture",
+        "vault",
+        "automation"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/daily-session-capture"
+    },
+    {
+      "name": "daily-trading-report",
+      "version": "1.0.0",
+      "description": "Daily multi-agent market research \u2014 runs analyst agents on a watchlist via a local LLM, emails a research report.",
+      "author": "Atlas OS",
+      "tags": [
+        "trading",
+        "research",
+        "email",
+        "llm"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/daily-trading-report"
+    },
+    {
+      "name": "friday-it-newsletter",
+      "version": "1.0.0",
+      "description": "Weekly IT news newsletter \u2014 AI, cloud, M365, cybersecurity, enterprise tech \u2014 emailed each Friday morning.",
+      "author": "Atlas OS",
+      "tags": [
+        "newsletter",
+        "email",
+        "research",
+        "weekly"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/friday-it-newsletter"
+    },
+    {
+      "name": "generate-vault-report-doc",
+      "version": "1.0.0",
+      "description": "Document creation \u2014 compile a set of vault notes on a topic into a polished, formatted Word (.docx) or PDF report.",
+      "author": "Atlas OS",
+      "tags": [
+        "report",
+        "document",
+        "docx",
+        "pdf",
+        "vault"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/generate-vault-report-doc"
+    },
+    {
+      "name": "inbox-triage-digest",
+      "version": "1.0.0",
+      "description": "Inbox triage digest \u2014 scan unread/important mail since the last run, summarise and categorise it, and email a concise digest.",
+      "author": "Atlas OS",
+      "tags": [
+        "email",
+        "triage",
+        "digest",
+        "productivity"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/inbox-triage-digest"
+    },
+    {
+      "name": "morning-session-capture",
+      "version": "1.0.0",
+      "description": "Morning capture of overnight and early-morning Cowork chat transcripts into the vault as session-log notes.",
+      "author": "Atlas OS",
+      "tags": [
+        "session-capture",
+        "vault",
+        "automation"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/morning-session-capture"
+    },
+    {
+      "name": "nightly-obsidian-index",
+      "version": "1.0.0",
+      "description": "Nightly vault index + morning briefing of what changed in your markdown vault.",
+      "author": "Atlas OS",
+      "tags": [
+        "vault",
+        "index",
+        "obsidian",
+        "nightly"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/nightly-obsidian-index"
+    },
+    {
+      "name": "nightly-rag-incremental",
+      "version": "1.0.0",
+      "description": "Incremental RAG embed of new/changed vault notes using a local embeddings endpoint.",
+      "author": "Atlas OS",
+      "tags": [
+        "rag",
+        "embeddings",
+        "vault",
+        "nightly"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/nightly-rag-incremental"
+    },
+    {
+      "name": "spreadsheet-analysis",
+      "version": "1.0.0",
+      "description": "Open a spreadsheet, compute summary statistics and trends, flag anomalies, and write a short findings note.",
+      "author": "Atlas OS",
+      "tags": [
+        "spreadsheet",
+        "analysis",
+        "data",
+        "report"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/spreadsheet-analysis"
+    },
+    {
+      "name": "topic-research-brief",
+      "version": "1.0.0",
+      "description": "Multi-round web research on a topic, synthesised into a cited brief and saved as a structured vault note.",
+      "author": "Atlas OS",
+      "tags": [
+        "research",
+        "web",
+        "vault",
+        "brief"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/topic-research-brief"
+    },
+    {
+      "name": "vault-lint-report",
+      "version": "1.0.0",
+      "description": "Vault health check \u2014 finds orphan notes, dead wikilinks, stale claims, and frontmatter gaps, then writes a lint report note.",
+      "author": "Atlas OS",
+      "tags": [
+        "vault",
+        "lint",
+        "maintenance",
+        "health"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/vault-lint-report"
+    },
+    {
+      "name": "weekly-digest-report",
+      "version": "1.0.0",
+      "description": "Weekly vault digest \u2014 new notes, decisions, and research from the past 7 days, compiled and emailed as an HTML report.",
+      "author": "Atlas OS",
+      "tags": [
+        "digest",
+        "email",
+        "report",
+        "weekly",
+        "vault"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/weekly-digest-report"
+    },
+    {
+      "name": "weekly-rag-full-reembed",
+      "version": "1.0.0",
+      "description": "Weekly full re-embed of all vault notes into the RAG vector store.",
+      "author": "Atlas OS",
+      "tags": [
+        "rag",
+        "embeddings",
+        "vault",
+        "weekly"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/weekly-rag-full-reembed"
+    },
+    {
+      "name": "weekly-system-health-check",
+      "version": "1.0.0",
+      "description": "Weekly full system health check \u2014 tests all Atlas OS subsystems and emails a report.",
+      "author": "Atlas OS",
+      "tags": [
+        "health",
+        "monitoring",
+        "report",
+        "weekly"
+      ],
+      "dependencies": [],
+      "download_url": "https://github.com/paulholland511/atlas-os/tree/main/skills/weekly-system-health-check"
+    }
+  ]
+}

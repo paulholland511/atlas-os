@@ -13,6 +13,7 @@ setup and the command reference, see [`docs/SETUP.md`](../SETUP.md) and
 | Knowledge graph | [knowledge-graph.md](knowledge-graph.md) | `scripts/build_graph.py` | `atlas graph` |
 | Git automation | [git-automation.md](git-automation.md) | `scripts/vault_commit.py`, `vault_changelog.py` | `atlas commit`, `atlas changelog` |
 | Scheduled tasks & skills catalog | [skills-and-automation.md](skills-and-automation.md) | `skills/`, `atlas_os/_skills.py` | `atlas skills` |
+| Skills marketplace / registry | [skills-marketplace.md](skills-marketplace.md) | `atlas_os/marketplace.py`, `skills/registry.json` | `atlas skills search`, `publish`, `registry` |
 | Email reports | [email-reports.md](email-reports.md) | `scripts/send_email.py` | `atlas email` |
 | Trading research SDK *(optional)* | [trading-sdk.md](trading-sdk.md) | `trading/`, `scripts/trading_briefing.py` | — |
 | Health check & dashboard | [health-and-dashboard.md](health-and-dashboard.md) | `scripts/health_check.py`, `templates/ops-dashboard.html` | `atlas health`, `atlas doctor` |

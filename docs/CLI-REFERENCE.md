@@ -599,6 +599,10 @@ atlas skills show NAME
 atlas skills install NAME [--force]
 atlas skills packs
 atlas skills install-pack NAME [--force]
+atlas skills search [QUERY]
+atlas skills publish PATH [--output DIR]
+atlas skills registry add URL
+atlas skills registry list
 ```
 
 **Top-level flags** (apply when run with no subcommand)
@@ -618,6 +622,18 @@ atlas skills install-pack NAME [--force]
 | `install` | `NAME` | `--force` | Install a skill into the scheduled-tasks dir, filling in `{{PLACEHOLDER}}` tokens from the environment. `--force` overwrites an existing install. |
 | `packs` | | | List the pre-built skill packs (curated bundles for common workflows), with each pack's skill count and members. |
 | `install-pack` | `NAME` | `--force` | Install every skill in a pack at once, each filled exactly as `install` would. Already-installed members are skipped unless `--force` is passed. |
+| `search` | `[QUERY]` | | Search the configured registries (the **marketplace**) by keyword or tag — matches name, description, and tags. An empty query lists everything. |
+| `publish` | `PATH` | `--output DIR` | Validate a skill folder against the schema and package it into a shareable `<name>-<version>.tar.gz` (with a generated `manifest.json`). Defaults to `dist/skills/`. |
+| `registry add` | `URL` | | Add a custom registry (URL or local `registry.json` path) to search alongside the built-in one. |
+| `registry list` | | | Show the configured registries and how many skills each lists. |
+
+**The skills marketplace** — `search`, `publish`, and `registry` form a small
+community marketplace. A *registry* is a JSON document (`registry.json`) listing
+skills with metadata (name, version, description, author, tags, dependencies,
+download URL). The built-in registry (`skills/registry.json`) ships with every
+Atlas OS install and is always searched; add more with `registry add`. See
+[`docs/features/skills-marketplace.md`](features/skills-marketplace.md) for the
+schema and the publish/share workflow.
 
 **Skill packs** — curated bundles that set up a complete workflow in one command:
 
@@ -630,10 +646,13 @@ atlas skills install-pack NAME [--force]
 **Environment variables** — `--sync` and the default install location need
 `VAULT_PATH`. `install` / `install-pack` write to `$ATLAS_SKILLS_DIR` if set,
 otherwise `$VAULT_PATH/.claude/skills/<name>/`; placeholder values are pulled
-from the environment / `.env` (e.g. `SCHEDULED_DIR`, email vars).
+from the environment / `.env` (e.g. `SCHEDULED_DIR`, email vars). The registry
+config file is resolved from `ATLAS_REGISTRIES_PATH` → `$VAULT_PATH/.atlas/registries.json`
+→ `./.atlas/registries.json`.
 
-**Exit codes** — `0` success; `1` install error or `VAULT_PATH` missing for
-`--sync`; `2` unknown skill name, unknown pack name, or missing `SKILL.md`.
+**Exit codes** — `0` success; `1` install error, validation failure on
+`publish`, registry error, or `VAULT_PATH` missing for `--sync`; `2` unknown
+skill name, unknown pack name, or missing `SKILL.md`.
 
 **Examples**
 
@@ -647,6 +666,10 @@ atlas skills --sync                           # regenerate the catalog note
 atlas skills packs                            # list the curated skill packs
 atlas skills install-pack knowledge           # install a whole workflow at once
 atlas skills install-pack trading --force     # reinstall, overwriting existing
+atlas skills search trading                   # search the marketplace by keyword/tag
+atlas skills publish ./my-skill               # validate + package a skill to share
+atlas skills registry add https://example.com/registry.json
+atlas skills registry list                    # show configured registries
 ```
 
 ---

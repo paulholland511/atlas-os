@@ -1038,8 +1038,10 @@ the next-generation Atlas OS (contributions welcome):
   cache, metadata filtering, and the `atlas search` command. *Shipped.*
 - **Open-source lightweight dashboard** ([#12](https://github.com/paulholland511/atlas-os/issues/12)) —
   health, audit trail, scheduled-task status, skill management, backend status.
-- **Skills marketplace / registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)) —
-  share, discover, and install community skills with schema validation.
+- ✅ **Skills marketplace / registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)) —
+  share, discover, and install community skills: a JSON registry, `atlas skills
+  search`, schema-validated `atlas skills publish` packaging, custom registries,
+  and manifest dependency resolution. *Shipped.*
 - **Visual knowledge graph viewer** ([#14](https://github.com/paulholland511/atlas-os/issues/14)) —
   a D3.js view over the graph `build_graph.py` generates.
 
@@ -1050,7 +1052,8 @@ Further out:
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
 
 Recently shipped: the SQLite vector store and the advanced RAG pipeline (above),
-an append-only audit trail, and `atlas skills install` for one-command skill
+the skills marketplace (`atlas skills search` / `publish` / `registry`), an
+append-only audit trail, and `atlas skills install` for one-command skill
 deployment with placeholder substitution.
 
 ---

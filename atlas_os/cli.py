@@ -48,7 +48,7 @@ from dotenv import load_dotenv
 from atlas_os import __version__, audit
 from atlas_os import backends as llm_backends
 from atlas_os import fileio, gitutil
-from atlas_os import _skills, packs
+from atlas_os import _skills, marketplace, packs
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import Endpoint, detect_endpoints
 from atlas_os._skills import default_catalog_path, load_skills, render_catalog
@@ -574,6 +574,114 @@ def skills_install_pack(
             f"{len(unresolved)} placeholder(s) left to fill by hand across the pack: {left}"
         )
         typer.echo("  edit each skill's SKILL.md to fill them in")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# skills marketplace — search, publish, registries
+# ─────────────────────────────────────────────────────────────────────────────
+@skills_app.command("search")
+def skills_search(
+    query: str = typer.Argument("", help="Keyword or tag to match (empty = list all)."),
+) -> None:
+    """Search the configured registries for community skills by keyword or tag.
+
+    Matches the skill name, description, and tags across every registry you've
+    added (the built-in registry is always searched). See ``registry add``.
+    """
+    try:
+        hits, loads = marketplace.search_registries(query)
+    except marketplace.RegistryError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    for load in loads:
+        if load.error is not None:
+            _echo_warn(f"registry {load.source!r} unavailable — {load.error}")
+
+    if not hits:
+        _echo_warn(f"no skills match {query!r}" if query else "no skills found")
+        raise typer.Exit()
+
+    typer.secho(f"\nFound {len(hits)} skill(s):\n", bold=True)
+    for hit in hits:
+        entry = hit.entry
+        typer.secho(f"  {entry.name}", fg=typer.colors.CYAN, nl=False)
+        typer.echo(f"  v{entry.version}  ·  {entry.author}  ·  [{hit.registry_name}]")
+        typer.echo(f"    {entry.description}")
+        if entry.tags:
+            typer.echo(f"    tags: {', '.join(entry.tags)}")
+        if entry.dependencies:
+            typer.echo(f"    depends on: {', '.join(entry.dependencies)}")
+    typer.echo("\nRun `atlas skills install <name>` to install a built-in skill.")
+
+
+@skills_app.command("publish")
+def skills_publish(
+    path: Path = typer.Argument(..., help="Path to the skill folder to package."),
+    output: Path = typer.Option(
+        Path("dist/skills"),
+        "--output",
+        "-o",
+        help="Directory to write the .tar.gz package into.",
+    ),
+) -> None:
+    """Validate a skill folder and package it into a shareable ``.tar.gz``.
+
+    The skill's ``SKILL.md`` is checked against the schema (required fields,
+    valid name/version, well-formed tags & dependencies); on success a
+    ``<name>-<version>.tar.gz`` containing a generated ``manifest.json`` plus the
+    skill's files is written, ready to attach to a registry's download URL.
+    """
+    try:
+        result = marketplace.package_skill(path, output)
+    except marketplace.SkillValidationError as exc:
+        _echo_fail(f"validation failed for {exc.target}:")
+        for problem in exc.problems:
+            typer.echo(f"  • {problem}")
+        raise typer.Exit(code=1) from exc
+
+    manifest = result.manifest
+    _echo_ok(f"packaged {manifest.name} v{manifest.version} → {result.archive}")
+    typer.echo(f"  {len(result.files)} file(s): {', '.join(result.files)}")
+    if manifest.dependencies:
+        typer.echo(f"  declares dependencies: {', '.join(manifest.dependencies)}")
+
+
+registry_app = typer.Typer(
+    no_args_is_help=True,
+    help="Manage the skill registries that `atlas skills search` queries.",
+)
+skills_app.add_typer(registry_app, name="registry")
+
+
+@registry_app.command("add")
+def registry_add(
+    url: str = typer.Argument(..., help="Registry URL or local registry.json path."),
+) -> None:
+    """Add a custom registry (URL or local path) to search alongside the built-in one."""
+    try:
+        sources = marketplace.add_registry(url)
+    except marketplace.RegistryError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+    _echo_ok(f"added registry {url!r}")
+    typer.echo(f"  {len(sources)} registr(y/ies) configured (built-in always included)")
+
+
+@registry_app.command("list")
+def registry_list() -> None:
+    """Show the configured registries and how many skills each currently lists."""
+    loads = marketplace.load_all_registries()
+    typer.secho(f"\nConfigured registries ({len(loads)}):\n", bold=True)
+    for load in loads:
+        label = "built-in" if load.source == marketplace.DEFAULT_REGISTRY else load.source
+        typer.secho(f"  {label}", fg=typer.colors.CYAN)
+        if load.registry is not None:
+            typer.echo(
+                f"    {load.registry.name} — {len(load.registry.entries)} skill(s)"
+            )
+        else:
+            _echo_warn(f"    unavailable — {load.error}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

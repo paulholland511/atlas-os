@@ -195,6 +195,43 @@ to add a skill to a pack, add its slug to that pack's `skills` tuple.
 
 ---
 
+## The skills marketplace
+
+Packs bundle the skills *this install already ships*. The **marketplace**
+(`atlas_os/marketplace.py`) goes further — it lets skills be *shared, discovered,
+and installed across installs*. It adds three things on top of the lifecycle:
+
+- **Registries** — a `registry.json` document listing skills with discovery
+  metadata (name, version, description, author, tags, dependencies, download
+  URL). The built-in registry (`skills/registry.json`) ships with every install
+  and is always searched; `atlas skills registry add <url>` registers more
+  (a URL or a local path). Configured registries live in
+  `$VAULT_PATH/.atlas/registries.json` (override with `ATLAS_REGISTRIES_PATH`).
+- **Search** — `atlas skills search <query>` matches the query against every
+  registry's skill names, descriptions, and tags, de-duplicated by name.
+- **Publish** — `atlas skills publish <path>` validates a skill folder against
+  the schema and packages it into a `<name>-<version>.tar.gz` containing a
+  generated `manifest.json` plus the skill's files, ready to attach to a
+  registry's download URL.
+
+Validation (`marketplace.validate_skill`) is stricter than the catalog reader:
+`SKILL.md` must have a frontmatter block with non-empty `name` and `description`,
+the `name` must be a valid slug, and any `version` (semver), `tags`, and
+`dependencies` (lists of strings) must be well-formed. Every problem is reported
+at once so a publisher fixes them in a single pass.
+
+A skill may declare `dependencies` on other skills in its frontmatter;
+`SkillRegistry.resolve_dependencies` returns the full install order
+(dependencies first) and raises on a missing dependency or a cycle.
+
+As with packs, every entry in the built-in `registry.json` must resolve to a
+real skill under `skills/` — `marketplace.validate_builtin_registry()` enforces
+this and the test-suite asserts it. See
+[`docs/features/skills-marketplace.md`](features/skills-marketplace.md) for the
+full schema and a worked publish example.
+
+---
+
 ## How skills reach sub-agents
 
 There is no separate injection step or registry call. The `Skills Catalog.md`

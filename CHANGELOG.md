@@ -7,6 +7,29 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Visual knowledge graph viewer** ([#14](https://github.com/paulholland511/atlas-os/issues/14)).
+  A D3.js force-directed view of how vault notes connect via `[[wikilinks]]`,
+  served by the dashboard and openable straight from the CLI:
+  - **`/graph` page** — a new template,
+    [`atlas_os/dashboard/templates/graph.html`](atlas_os/dashboard/templates/graph.html),
+    a self-contained viewer (inline CSS/JS, D3 from a CDN). Nodes are **coloured
+    by type** (session log, source, skill, research, wiki, memory, note), with
+    zoom/pan, dragging, a name search, per-type filter chips, and a click-through
+    panel showing each note's outbound links and backlinks. It degrades to a
+    friendly empty state when there's nothing to graph, and self-heals its layout
+    via a `ResizeObserver` so the force diagram stays centred.
+  - **`GET /api/graph`** — a new `data.graph_data()` helper scans the vault live
+    (mirroring `build_graph.py`) and returns nodes (with `type`, `degree`, in/out
+    counts), `{source, target}` edges, a colour legend, and summary stats. It
+    never raises for the "no vault / no notes" cases, and caps huge vaults to the
+    most-connected nodes. Added to the dashboard's **Knowledge** nav group.
+  - **`atlas graph --open`** — (re)builds the graph and launches the dashboard at
+    `/graph` in your browser. New flags `--host` / `--port` / `--no-build` /
+    `--json`; the serving logic is shared with `atlas dashboard` via a new
+    `_serve_dashboard()` helper.
+  - Tests: [`tests/test_graph.py`](tests/test_graph.py) covers node classification,
+    wikilink resolution (aliases, headings, nested paths), edge dedup, orphans,
+    the node cap, and both routes.
 - **Skills marketplace / community registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)).
   A new module, [`atlas_os/marketplace.py`](atlas_os/marketplace.py), turns skills
   from files in this repo into something shareable across installs:

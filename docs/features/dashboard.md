@@ -4,9 +4,10 @@
 **CLI:** `atlas dashboard`
 
 A lightweight, local-first web UI over the things you already run from the
-`atlas` command line. It surfaces six panels — system health, the audit trail,
-scheduled tasks, the skills catalog, vector-store stats, and RAG search — in a
-clean dark theme, with no JavaScript framework and no build step.
+`atlas` command line. It surfaces seven panels — system health, the audit trail,
+scheduled tasks, the skills catalog, the knowledge graph, vector-store stats, and
+RAG search — in a clean dark theme, with no build step and only one client-side
+dependency (D3, used by the graph page).
 
 It is a **view** over your machine, never a second source of truth: every number
 is read live from the existing Atlas OS modules (`vectordb`, `audit`, `_skills`,
@@ -44,6 +45,7 @@ and exits rather than throwing a traceback.
 | **Audit trail** | `/audit` | A paginated, newest-first view of the JSONL audit log, filterable by action and a `--since`-style date window. |
 | **Scheduled tasks** | `/scheduled` | Every schedulable skill, its suggested cadence, whether it's installed, and its last recorded run (matched from the audit trail). |
 | **Skills** | `/skills` | The full skills catalog with install state, plus the curated **packs** — each with a one-click *Install pack* button. |
+| **Knowledge graph** | `/graph` | A D3 force-directed view of how your notes connect via `[[wikilinks]]`: nodes coloured by type (session log, source, skill, research, wiki, memory, note), zoom/pan, search, per-type filters, and a click-through panel of each note's links and backlinks. Data comes from `GET /api/graph` (a live vault scan). Also reachable with `atlas graph --open`. |
 | **Vector store** | `/vectors` | Chunk count, files indexed, cached embeddings, database size, search backend (sqlite-vec vs brute-force), and last-embed time. |
 | **RAG search** | `/search` | A search box that runs the same engine as `atlas search` (hybrid / vector / keyword), rendering ranked results with scores and snippets. |
 
@@ -55,7 +57,7 @@ Two layers, deliberately separated:
 
 - **`atlas_os/dashboard/data.py`** — pure, Flask-free functions that gather and
   shape data for templates (`health_report`, `audit_page`, `scheduled_tasks`,
-  `skills_overview`, `vector_stats`, `run_search`, …). They never raise for the
+  `skills_overview`, `graph_data`, `vector_stats`, `run_search`, …). They never raise for the
   ordinary "not set up yet" states (no vault, no index, no endpoint) — those are
   rendered as amber panels — so the dashboard degrades gracefully. This layer
   imports without Flask and is unit-tested directly.

@@ -471,7 +471,7 @@ underlying script.
 | `atlas skills show` | Print a skill's `SKILL.md` | — |
 | `atlas skills install` | Install a skill into the scheduled-tasks dir, filling placeholders | `--force` |
 | `atlas embed` | Build/refresh the RAG index | `--full`, `--incremental`, `--test N`, `--folder NAME`, `--pdfs-only`, `--checkpoint-interval N`, `--batch-size N` |
-| `atlas graph` | Rebuild the wikilink knowledge graph | — |
+| `atlas graph` | Rebuild the wikilink knowledge graph, or `--open` the interactive D3 viewer | `--open`, `--host`, `--port`, `--no-build`, `--json` |
 | `atlas commit` | Auto-commit the vault with a categorised message | `--dry-run`, `--json` |
 | `atlas changelog` | Summarise vault changes over a window | `--since`, `--markdown`, `--json` |
 | `atlas health` | Full subsystem health probe | `--json`, `--quiet` |
@@ -713,7 +713,10 @@ atlas search "kelly" --mode keyword                   # BM25 only (no endpoint)
 **Knowledge graph (`atlas graph`).** Walks every note, resolves `[[wikilinks]]`,
 and writes `$RAG_DIR/graph.json` with nodes, edges, adjacency, and backlinks —
 the basis for "related notes" and the dashboard's graph view. It's rebuilt
-automatically after `atlas embed --full`.
+automatically after `atlas embed --full`. Run `atlas graph --open` to launch the
+interactive **D3 graph viewer** in your browser (the dashboard's `/graph` page) —
+a force-directed map of your vault you can zoom, pan, search, filter by note
+type, and click through note-by-note.
 
 Both `.rag/` artifacts are **git-ignored** and never leave your machine.
 
@@ -829,12 +832,14 @@ pip install 'atlas-os[dashboard]'
 atlas dashboard                 # serves http://127.0.0.1:8501
 ```
 
-Six panels, read live from the same modules the CLI uses (no second source of
+Seven panels, read live from the same modules the CLI uses (no second source of
 truth): **system health** (`atlas doctor` with green/amber/red indicators), a
 paginated **audit trail** browser, **scheduled tasks** with last-run status, a
-**skills** manager with one-click pack installs, **vector-store stats** (chunks,
-files, DB size, last embed), and **RAG search**. Flask + Jinja2 only — no
-JavaScript framework, no build step. Details:
+**skills** manager with one-click pack installs, an interactive **knowledge
+graph** (a D3 force-directed view at `/graph`, also reachable via `atlas graph
+--open`), **vector-store stats** (chunks, files, DB size, last embed), and **RAG
+search**. Flask + Jinja2 only — the one client-side dependency is D3, loaded by
+the graph page from a CDN. Details:
 [`docs/features/dashboard.md`](docs/features/dashboard.md).
 
 Prefer to embed the data in your own page? A self-contained, single-file HTML
@@ -1060,8 +1065,11 @@ the next-generation Atlas OS (contributions welcome):
   share, discover, and install community skills: a JSON registry, `atlas skills
   search`, schema-validated `atlas skills publish` packaging, custom registries,
   and manifest dependency resolution. *Shipped.*
-- **Visual knowledge graph viewer** ([#14](https://github.com/paulholland511/atlas-os/issues/14)) —
-  a D3.js view over the graph `build_graph.py` generates.
+- ✅ **Visual knowledge graph viewer** ([#14](https://github.com/paulholland511/atlas-os/issues/14)) —
+  a D3.js force-directed view of how your notes connect, in the dashboard at
+  `/graph` (or `atlas graph --open`): nodes coloured by type, zoom/pan, search,
+  per-type filters, and a click-through panel of each note's links and backlinks.
+  *Shipped.*
 
 Further out:
 

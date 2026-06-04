@@ -300,12 +300,49 @@ def _resolve_rag_dir() -> Path | None:
     return None
 
 
-@app.command(context_settings=_PASSTHROUGH)
-def graph(ctx: typer.Context) -> None:
-    """Rebuild the wikilink knowledge graph."""
+@app.command()
+def graph(
+    open_browser: bool = typer.Option(
+        False, "--open",
+        help="Build the graph, then open the interactive viewer in your browser.",
+    ),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Interface to bind when serving the viewer (--open)."
+    ),
+    port: int = typer.Option(
+        8501, "--port", "-p", help="Port to serve the viewer on (--open)."
+    ),
+    no_build: bool = typer.Option(
+        False, "--no-build", help="With --open, skip rebuilding graph.json before serving."
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit the build summary as JSON (ignored with --open)."
+    ),
+) -> None:
+    """Rebuild the wikilink knowledge graph — or ``--open`` the interactive viewer.
+
+    With no flags this rebuilds ``graph.json`` from your vault's ``[[wikilinks]]``
+    and appends an audit entry (as before). With ``--open`` it (re)builds the
+    graph and launches the local dashboard at ``/graph`` — a D3 force-directed map
+    of how your notes connect: zoom, pan, click a node for its links, search and
+    filter by type. Serving needs the dashboard extra (``atlas-os[dashboard]``).
+    """
     _require_env("VAULT_PATH")
-    _run_audited("graph", scripts_dir() / "build_graph.py", ctx.args,
-                 _context_for("graph", ctx.args))
+
+    if open_browser:
+        if not no_build:
+            typer.echo("  Building knowledge graph…")
+            rc = subprocess.call([sys.executable, str(scripts_dir() / "build_graph.py")])
+            if rc != 0:
+                # The viewer scans the vault live, so a stale/failed build is not
+                # fatal — warn and serve what we can rather than bailing out.
+                _echo_warn("graph build failed; serving the live vault scan instead.")
+        _serve_dashboard(host, port, open_browser=True, open_path="/graph")
+        return
+
+    args = ["--json"] if json_output else []
+    _run_audited("graph", scripts_dir() / "build_graph.py", args,
+                 _context_for("graph", args))
 
 
 @app.command(context_settings=_PASSTHROUGH)
@@ -1696,6 +1733,44 @@ def doctor(
 # ─────────────────────────────────────────────────────────────────────────────
 # dashboard — the lightweight local web UI
 # ─────────────────────────────────────────────────────────────────────────────
+def _serve_dashboard(
+    host: str,
+    port: int,
+    *,
+    open_browser: bool,
+    open_path: str = "/",
+    debug: bool = False,
+) -> None:
+    """Build the dashboard app and run it, optionally opening a browser tab.
+
+    Shared by ``atlas dashboard`` and ``atlas graph --open`` (which lands on
+    ``/graph``). Exits with a friendly message if the dashboard extra (Flask)
+    isn't installed.
+    """
+    try:
+        from atlas_os.dashboard.app import create_app
+    except ModuleNotFoundError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    flask_app = create_app()
+    base = f"http://{host}:{port}"
+    typer.secho(f"\n  ⛰  Atlas OS dashboard → {base}", fg=typer.colors.CYAN, bold=True)
+    typer.echo("  Local-first and read-only. Press Ctrl+C to stop.\n")
+
+    # Open the browser once, after a short delay so the server is accepting
+    # connections. Skipped under --debug (the reloader spawns a child process,
+    # which would otherwise open a second tab).
+    if open_browser and not debug:
+        import threading
+        import webbrowser
+
+        url = base + open_path
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    flask_app.run(host=host, port=port, debug=debug)
+
+
 @app.command()
 def dashboard(
     host: str = typer.Option(
@@ -1709,36 +1784,17 @@ def dashboard(
         False, "--debug", help="Run Flask in debug mode (auto-reload, tracebacks)."
     ),
 ) -> None:
-    """Launch the local web dashboard (health, audit, skills, vectors, search).
+    """Launch the local web dashboard (health, audit, skills, graph, vectors, search).
 
     A minimal, local-first Flask UI over the data ``atlas`` already exposes —
-    system health, the audit trail, scheduled tasks, the skills catalog,
-    vector-store stats, and RAG search. It reads from your machine only; bind it
-    to localhost and never expose it publicly with vault data behind it.
+    system health, the audit trail, scheduled tasks, the skills catalog, the
+    knowledge graph, vector-store stats, and RAG search. It reads from your
+    machine only; bind it to localhost and never expose it publicly with vault
+    data behind it.
 
     Needs the optional dashboard extra: ``pip install 'atlas-os[dashboard]'``.
     """
-    try:
-        from atlas_os.dashboard.app import create_app
-    except ModuleNotFoundError as exc:
-        _echo_fail(str(exc))
-        raise typer.Exit(code=1) from exc
-
-    flask_app = create_app()
-    url = f"http://{host}:{port}"
-    typer.secho(f"\n  ⛰  Atlas OS dashboard → {url}", fg=typer.colors.CYAN, bold=True)
-    typer.echo("  Local-first and read-only. Press Ctrl+C to stop.\n")
-
-    # Open the browser once, after a short delay so the server is accepting
-    # connections. Skipped under --debug (the reloader spawns a child process,
-    # which would otherwise open a second tab).
-    if open_browser and not debug:
-        import threading
-        import webbrowser
-
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-
-    flask_app.run(host=host, port=port, debug=debug)
+    _serve_dashboard(host, port, open_browser=open_browser, debug=debug)
 
 
 if __name__ == "__main__":

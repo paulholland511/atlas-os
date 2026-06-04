@@ -105,13 +105,36 @@ Nodes are plain strings (not objects); edges carry no weight or type.
 ## Usage
 
 ```bash
-atlas graph                       # rebuild just the graph
+atlas graph                       # rebuild just the graph (writes graph.json)
+atlas graph --open                # build, then open the interactive viewer in a browser
 atlas embed --full                # also rebuilds the graph at the end
 python3 scripts/build_graph.py    # direct invocation
 ```
 
-The graph powers the dashboard's graph view and "related notes" features; the
-[dashboard](health-and-dashboard.md) can serve it as `GET /api/graph`.
+`--open` accepts `--host` / `--port` (where to serve, default `127.0.0.1:8501`)
+and `--no-build` (serve without rebuilding `graph.json` first). It needs the
+dashboard extra (`pip install 'atlas-os[dashboard]'`).
 
-See also: [rag-search.md](rag-search.md) ·
+---
+
+## Visual viewer
+
+The [dashboard](dashboard.md) ships an interactive **D3 force-directed viewer** at
+`/graph` (open it directly with `atlas graph --open`). It is served by two routes:
+
+- **`GET /graph`** — the page itself ([`templates/graph.html`](../../atlas_os/dashboard/templates/graph.html)),
+  a self-contained template with inline CSS/JS; D3 is loaded from a CDN.
+- **`GET /api/graph`** — the graph as JSON, built by `data.graph_data()`. Rather
+  than read `graph.json`, this **scans the vault live** (the same wikilink logic
+  as `build_graph.py`) so the view is always current without a prior
+  `atlas graph` run. Each node carries a `type`, link `degree`, and in/out counts;
+  edges are `{source, target}` id pairs; a `types` colour legend and summary
+  `stats` ride along. Huge vaults are capped to the most-connected nodes.
+
+Nodes are **coloured by type** — derived from each note's path: session log,
+source, skill, research, wiki, memory, or a plain note. The viewer supports
+zoom/pan, dragging, a name search, per-type filter chips, and a click-through
+detail panel listing a note's outbound links and backlinks.
+
+See also: [rag-search.md](rag-search.md) · [dashboard.md](dashboard.md) ·
 [`docs/SCRIPTS.md`](../SCRIPTS.md#build_graphpy)

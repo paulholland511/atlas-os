@@ -39,6 +39,7 @@ _NAV_GROUPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
     (
         "Knowledge",
         (
+            ("graph", "Knowledge graph", "How your notes connect"),
             ("vectors", "Vector store", "The RAG index"),
             ("search", "RAG search", "Search your vault"),
         ),
@@ -70,6 +71,7 @@ def create_app() -> Flask:
             Flask,
             abort,
             flash,
+            jsonify,
             redirect,
             render_template,
             request,
@@ -140,6 +142,14 @@ def create_app() -> Flask:
         result = data.install_pack(name, force=force)
         flash(result["message"], "ok" if result["ok"] else "error")
         return redirect(url_for("skills"))
+
+    @app.route("/graph")
+    def graph():  # noqa: ANN202
+        return render_template("graph.html")
+
+    @app.route("/api/graph")
+    def api_graph():  # noqa: ANN202
+        return jsonify(data.graph_data())
 
     @app.route("/vectors")
     def vectors():  # noqa: ANN202

@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Knowledge graph{% endblock %}
+{% block heading %}Knowledge graph{% endblock %}
+{% block subhead %}
+  <p class="lede">A force-directed view of how your notes connect through <code>[[wikilinks]]</code> — drag, zoom, click a node for its links.</p>
+{% endblock %}
+
+{#
+  Self-contained graph viewer. D3.js is loaded from cdnjs (the one network call in
+  an otherwise local-first dashboard); the graph data itself is served locally by
+  /api/graph and never leaves the machine. All page-specific CSS/JS lives inline
+  here so the rest of the dashboard stays untouched.
+#}
+{% block content %}
+<style>
+  .graph-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-bottom: 14px;
+  }
+  .graph-search {
+    position: relative; flex: 1 1 260px; min-width: 200px;
+    display: flex; align-items: center;
+  }
+  .graph-search .icon { position: absolute; left: 12px; color: var(--text-faint); }
+  .graph-search input {
+    width: 100%; padding: 10px 12px 10px 38px;
+    background: var(--inset); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font: inherit; font-size: 14px;
+  }
+  .graph-search input:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+  .graph-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .graph-stat {
+    display: inline-flex; align-items: baseline; gap: 5px;
+    padding: 6px 10px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 12px; color: var(--text-dim);
+  }
+  .graph-stat b { color: var(--text); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+  .graph-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .legend-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 11px 5px 9px; border: 1px solid var(--border);
+    background: var(--surface-2); border-radius: 999px;
+    font-size: 12px; color: var(--text-dim); cursor: pointer;
+    user-select: none; transition: opacity .12s, border-color .12s;
+  }
+  .legend-chip .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .legend-chip .count { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .legend-chip.off { opacity: .42; }
+  .legend-chip:hover { border-color: var(--border-2); }
+
+  .graph-stage {
+    position: relative;
+    height: clamp(440px, calc(100vh - 360px), 760px);
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(34,197,94,0.06), transparent 60%),
+      var(--inset);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .graph-stage svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  .graph-stage svg.grabbing { cursor: grabbing; }
+  .graph-stage .link { stroke: var(--border-2); stroke-opacity: .55; }
+  .graph-stage .node { cursor: pointer; }
+  .graph-stage .node circle { stroke: var(--bg); stroke-width: 1.5px; transition: stroke-width .1s; }
+  .graph-stage .node text {
+    fill: var(--text-dim); font-size: 10px; font-family: var(--sans);
+    pointer-events: none; paint-order: stroke;
+    stroke: var(--inset); stroke-width: 3px; stroke-linejoin: round;
+  }
+  .graph-stage .node.dim { opacity: .12; }
+  .graph-stage .link.dim { stroke-opacity: .06; }
+  .graph-stage .node.sel circle { stroke: var(--text); stroke-width: 2.5px; }
+
+  .graph-controls {
+    position: absolute; right: 12px; bottom: 12px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .graph-controls button {
+    width: 32px; height: 32px; display: grid; place-items: center;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-xs); color: var(--text-dim); cursor: pointer;
+    font-size: 16px; line-height: 1;
+  }
+  .graph-controls button:hover { color: var(--text); border-color: var(--border-2); }
+
+  .graph-empty, .graph-loading {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px;
+    color: var(--text-faint); text-align: center; padding: 24px;
+  }
+  .graph-empty code { color: var(--text-dim); }
+
+  .node-panel {
+    position: absolute; top: 12px; right: 12px; width: 260px; max-width: calc(100% - 24px);
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow);
+    padding: 14px; transform: translateX(calc(100% + 24px));
+    transition: transform .18s ease; max-height: calc(100% - 24px); overflow-y: auto;
+  }
+  .node-panel.open { transform: none; }
+  .node-panel .np-close {
+    position: absolute; top: 10px; right: 10px; background: none; border: none;
+    color: var(--text-faint); cursor: pointer; font-size: 18px; line-height: 1;
+  }
+  .node-panel .np-close:hover { color: var(--text); }
+  .node-panel .np-type {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim);
+  }
+  .node-panel .np-type .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .node-panel h3 {
+    margin: 8px 0 4px; font-size: 15px; color: var(--text); word-break: break-word;
+  }
+  .node-panel .np-path {
+    font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+    word-break: break-all; margin-bottom: 10px;
+  }
+  .node-panel .np-degrees { display: flex; gap: 6px; margin-bottom: 12px; }
+  .node-panel .np-degrees span {
+    flex: 1; text-align: center; padding: 6px 4px; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--radius-xs); font-size: 11px;
+    color: var(--text-faint);
+  }
+  .node-panel .np-degrees b { display: block; color: var(--text); font-size: 15px; }
+  .node-panel .np-links h4 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-faint); margin: 12px 0 6px;
+  }
+  .node-panel .np-links ul { list-style: none; margin: 0; padding: 0; }
+  .node-panel .np-links li {
+    font-size: 12px; padding: 4px 6px; border-radius: var(--radius-xs);
+    color: var(--link); cursor: pointer; word-break: break-word;
+  }
+  .node-panel .np-links li:hover { background: var(--surface-2); }
+  .node-panel .np-none { font-size: 12px; color: var(--text-faint); }
+</style>
+
+<div class="graph-toolbar">
+  <label class="graph-search">
+    {{ icons.icon("search", 18) }}
+    <input type="search" id="graph-search" placeholder="Filter notes by name…" autocomplete="off">
+  </label>
+  <div class="graph-stats" id="graph-stats"></div>
+</div>
+
+<div class="graph-legend" id="graph-legend"></div>
+
+<div class="graph-stage" id="graph-stage">
+  <div class="graph-loading" id="graph-loading">{{ icons.icon("graph", 28) }}<span>Loading graph…</span></div>
+  <div class="graph-controls">
+    <button type="button" id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+    <button type="button" id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+    <button type="button" id="zoom-fit" title="Reset view" aria-label="Reset view">{{ icons.icon("refresh", 15) }}</button>
+  </div>
+  <aside class="node-panel" id="node-panel" aria-live="polite"></aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(function () {
+  "use strict";
+
+  var stage   = document.getElementById("graph-stage");
+  var loading = document.getElementById("graph-loading");
+  var panel   = document.getElementById("node-panel");
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // The graph glyph, single-quoted so it stays a valid JS string literal (the
+  // Jinja icon macro emits double quotes, which can't be embedded inline here).
+  var graphIcon =
+    "<svg class='icon' width='30' height='30' viewBox='0 0 24 24' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>" +
+    "<circle cx='5' cy='6' r='2.5'/><circle cx='19' cy='6' r='2.5'/>" +
+    "<circle cx='12' cy='18' r='2.5'/>" +
+    "<path d='M6.8 7.4 10.6 16M17.2 7.4 13.4 16M7.3 6h9.4'/></svg>";
+
+  if (typeof d3 === "undefined") {
+    loading.innerHTML = "<span>Could not load D3.js. The graph needs a network " +
+      "connection the first time (it streams from cdnjs).</span>";
+    return;
+  }
+
+  fetch("{{ url_for('api_graph') }}")
+    .then(function (r) { return r.json(); })
+    .then(render)
+    .catch(function (err) {
+      loading.innerHTML = "<span>Failed to load graph data: " +
+        escapeHtml(err.message) + "</span>";
+    });
+
+  function render(graph) {
+    var colorOf = {};
+    graph.types.forEach(function (t) { colorOf[t.type] = t.color; });
+
+    if (!graph.available || !graph.nodes.length) {
+      loading.classList.add("graph-empty");
+      loading.innerHTML =
+        graphIcon + "<p>" +
+        escapeHtml(graph.reason || "No notes to graph yet.") + "</p>" +
+        "<p>Add some <code>[[wikilinks]]</code> between notes, then reload.</p>";
+      return;
+    }
+    loading.remove();
+
+    // ── stats ────────────────────────────────────────────────────────────────
+    var st = graph.stats;
+    var statsEl = document.getElementById("graph-stats");
+    var statItems = [
+      ["notes", st.nodes], ["links", st.edges],
+      ["orphans", st.orphans], ["avg degree", st.avg_degree.toFixed(1)],
+    ];
+    if (st.truncated) statItems.push(["hidden", "+" + st.truncated]);
+    statsEl.innerHTML = statItems.map(function (p) {
+      return '<span class="graph-stat"><b>' + p[1] + "</b> " + p[0] + "</span>";
+    }).join("");
+
+    // ── legend (per-type counts + visibility toggles) ─────────────────────────
+    var counts = {};
+    graph.nodes.forEach(function (n) { counts[n.type] = (counts[n.type] || 0) + 1; });
+    var hidden = {};  // type -> true when toggled off
+    var legendEl = document.getElementById("graph-legend");
+    graph.types.forEach(function (t) {
+      if (!counts[t.type]) return;
+      var chip = document.createElement("button");
+      chip.className = "legend-chip";
+      chip.type = "button";
+      chip.innerHTML = '<span class="dot" style="background:' + t.color + '"></span>' +
+        escapeHtml(t.label) + ' <span class="count">' + counts[t.type] + "</span>";
+      chip.addEventListener("click", function () {
+        hidden[t.type] = !hidden[t.type];
+        chip.classList.toggle("off", hidden[t.type]);
+        applyFilter();
+      });
+      legendEl.appendChild(chip);
+    });
+
+    // ── svg scaffolding ───────────────────────────────────────────────────────
+    // Fall back to sane defaults: the stage can measure 0×0 if render() runs
+    // before the page has finished laying out. A ResizeObserver below corrects
+    // the viewBox and re-centres the layout once the real size is known.
+    function stageSize() {
+      return [stage.clientWidth || 800, stage.clientHeight || 500];
+    }
+    var size = stageSize();
+    var width = size[0], height = size[1];
+    var svg = d3.select(stage).append("svg")
+      .attr("viewBox", [0, 0, width, height]);
+    var root = svg.append("g");
+    var linkLayer = root.append("g").attr("class", "links");
+    var nodeLayer = root.append("g").attr("class", "nodes");
+
+    var radius = function (d) { return 4 + Math.sqrt(d.degree) * 1.8; };
+
+    var link = linkLayer.selectAll("line")
+      .data(graph.edges).join("line")
+      .attr("class", "link").attr("stroke-width", 1);
+
+    var node = nodeLayer.selectAll("g")
+      .data(graph.nodes).join("g").attr("class", "node");
+
+    node.append("circle")
+      .attr("r", radius)
+      .attr("fill", function (d) { return colorOf[d.type] || "#94a3b8"; });
+
+    node.append("text")
+      .attr("x", function (d) { return radius(d) + 4; })
+      .attr("y", 3)
+      .text(function (d) { return d.label; })
+      .style("display", function (d) { return d.degree >= 2 ? null : "none"; });
+
+    // Neighbour lookup for the detail panel and hover-highlighting.
+    var neighbours = {};
+    graph.nodes.forEach(function (n) { neighbours[n.id] = { out: [], in: [] }; });
+    graph.edges.forEach(function (e) {
+      var s = typeof e.source === "object" ? e.source.id : e.source;
+      var t = typeof e.target === "object" ? e.target.id : e.target;
+      if (neighbours[s]) neighbours[s].out.push(t);
+      if (neighbours[t]) neighbours[t].in.push(s);
+    });
+
+    // ── force simulation ──────────────────────────────────────────────────────
+    var centerForce = d3.forceCenter(width / 2, height / 2);
+    var sim = d3.forceSimulation(graph.nodes)
+      .force("link", d3.forceLink(graph.edges).id(function (d) { return d.id; }).distance(60).strength(0.5))
+      .force("charge", d3.forceManyBody().strength(-160))
+      .force("center", centerForce)
+      .force("collide", d3.forceCollide().radius(function (d) { return radius(d) + 4; }))
+      .on("tick", ticked);
+
+    // Keep the viewBox and centre in sync with the stage's real size — fires once
+    // shortly after load (when 0×0 becomes the laid-out size) and on every resize.
+    function resize() {
+      var s = stageSize();
+      if (s[0] === width && s[1] === height) return;
+      width = s[0]; height = s[1];
+      svg.attr("viewBox", [0, 0, width, height]);
+      centerForce.x(width / 2).y(height / 2);
+      sim.alpha(0.5).restart();
+    }
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(resize).observe(stage);
+    }
+    window.addEventListener("resize", resize);
+
+    function ticked() {
+      link
+        .attr("x1", function (d) { return d.source.x; })
+        .attr("y1", function (d) { return d.source.y; })
+        .attr("x2", function (d) { return d.target.x; })
+        .attr("y2", function (d) { return d.target.y; });
+      node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
+    }
+
+    // ── drag ──────────────────────────────────────────────────────────────────
+    node.call(d3.drag()
+      .on("start", function (event, d) {
+        if (!event.active) sim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on("drag", function (event, d) { d.fx = event.x; d.fy = event.y; })
+      .on("end", function (event, d) {
+        if (!event.active) sim.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      }));
+
+    // ── zoom / pan ────────────────────────────────────────────────────────────
+    var svgEl = svg.node();
+    var zoom = d3.zoom().scaleExtent([0.15, 6]).on("zoom", function (event) {
+      root.attr("transform", event.transform);
+    });
+    svg.call(zoom)
+      .on("dblclick.zoom", null)
+      .on("mousedown.cursor", function () { svgEl.classList.add("grabbing"); })
+      .on("mouseup.cursor mouseleave.cursor", function () { svgEl.classList.remove("grabbing"); });
+
+    document.getElementById("zoom-in").onclick  = function () { svg.transition().call(zoom.scaleBy, 1.4); };
+    document.getElementById("zoom-out").onclick = function () { svg.transition().call(zoom.scaleBy, 1 / 1.4); };
+    document.getElementById("zoom-fit").onclick = function () {
+      svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+    };
+
+    // ── selection / detail panel ──────────────────────────────────────────────
+    var selected = null;
+
+    function highlight(id) {
+      var keep = {};
+      if (id) {
+        keep[id] = true;
+        neighbours[id].out.forEach(function (n) { keep[n] = true; });
+        neighbours[id].in.forEach(function (n) { keep[n] = true; });
+      }
+      node.classed("dim", function (d) { return id && !keep[d.id]; });
+      node.classed("sel", function (d) { return d.id === id; });
+      link.classed("dim", function (d) {
+        if (!id) return false;
+        var s = d.source.id, t = d.target.id;
+        return !(s === id || t === id);
+      });
+    }
+
+    function openPanel(d) {
+      selected = d.id;
+      highlight(d.id);
+      var nb = neighbours[d.id];
+      var typeLabel = (graph.types.find(function (t) { return t.type === d.type; }) || {}).label || d.type;
+      function links(ids) {
+        var uniq = ids.filter(function (v, i) { return ids.indexOf(v) === i; });
+        if (!uniq.length) return '<p class="np-none">none</p>';
+        return "<ul>" + uniq.map(function (nid) {
+          var n = byId[nid];
+          return '<li data-id="' + escapeHtml(nid) + '">' + escapeHtml(n ? n.label : nid) + "</li>";
+        }).join("") + "</ul>";
+      }
+      panel.innerHTML =
+        '<button class="np-close" aria-label="Close">×</button>' +
+        '<span class="np-type"><span class="dot" style="background:' + (colorOf[d.type] || "#94a3b8") + '"></span>' + escapeHtml(typeLabel) + "</span>" +
+        "<h3>" + escapeHtml(d.label) + "</h3>" +
+        '<div class="np-path">' + escapeHtml(d.path) + "</div>" +
+        '<div class="np-degrees">' +
+          "<span><b>" + d.out + "</b>outgoing</span>" +
+          "<span><b>" + d.in + "</b>backlinks</span>" +
+        "</div>" +
+        '<div class="np-links"><h4>Links to</h4>' + links(nb.out) +
+          "<h4>Linked from</h4>" + links(nb.in) + "</div>";
+      panel.classList.add("open");
+      panel.querySelector(".np-close").onclick = closePanel;
+      panel.querySelectorAll(".np-links li").forEach(function (li) {
+        li.onclick = function () {
+          var n = byId[li.getAttribute("data-id")];
+          if (n) openPanel(n);
+        };
+      });
+    }
+
+    function closePanel() {
+      selected = null;
+      panel.classList.remove("open");
+      highlight(null);
+    }
+
+    var byId = {};
+    graph.nodes.forEach(function (n) { byId[n.id] = n; });
+
+    node.on("click", function (event, d) { event.stopPropagation(); openPanel(d); });
+    svg.on("click", closePanel);
+
+    // ── search + type filter ──────────────────────────────────────────────────
+    var searchInput = document.getElementById("graph-search");
+    function applyFilter() {
+      var q = searchInput.value.trim().toLowerCase();
+      node.style("display", function (d) {
+        if (hidden[d.type]) return "none";
+        if (q && d.label.toLowerCase().indexOf(q) === -1 && d.path.toLowerCase().indexOf(q) === -1) return "none";
+        return null;
+      });
+      var visible = {};
+      node.each(function (d) { if (this.style.display !== "none") visible[d.id] = true; });
+      link.style("display", function (d) {
+        return (visible[d.source.id] && visible[d.target.id]) ? null : "none";
+      });
+    }
+    searchInput.addEventListener("input", applyFilter);
+  }
+})();
+</script>
+{% endblock %}

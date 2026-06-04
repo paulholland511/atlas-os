@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Audit trail{% endblock %}
 {% block heading %}Audit trail{% endblock %}
 {% block subhead %}
@@ -66,12 +67,12 @@
     {% if page.pages > 1 %}
       <nav class="pager">
         {% if page.page > 1 %}
-          <a href="{{ url_for('audit', page=page.page - 1, action=action, since=since) }}">← Newer</a>
-        {% else %}<span class="dim">← Newer</span>{% endif %}
+          <a href="{{ url_for('audit', page=page.page - 1, action=action, since=since) }}">{{ icons.icon("arrow-left", 14) }} Newer</a>
+        {% else %}<span class="dim">{{ icons.icon("arrow-left", 14) }} Newer</span>{% endif %}
         <span class="dim">Page {{ page.page }} of {{ page.pages }}</span>
         {% if page.page < page.pages %}
-          <a href="{{ url_for('audit', page=page.page + 1, action=action, since=since) }}">Older →</a>
-        {% else %}<span class="dim">Older →</span>{% endif %}
+          <a href="{{ url_for('audit', page=page.page + 1, action=action, since=since) }}">Older {{ icons.icon("arrow-right", 14) }}</a>
+        {% else %}<span class="dim">Older {{ icons.icon("arrow-right", 14) }}</span>{% endif %}
       </nav>
     {% endif %}
   {% else %}

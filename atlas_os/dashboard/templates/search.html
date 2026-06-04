@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}RAG search{% endblock %}
 {% block heading %}RAG search{% endblock %}
 {% block subhead %}
@@ -18,7 +19,7 @@
         <option value="{{ k }}" {{ 'selected' if k == top_k else '' }}>top {{ k }}</option>
       {% endfor %}
     </select>
-    <button type="submit">Search</button>
+    <button type="submit">{{ icons.icon("search", 16) }} Search</button>
   </form>
 
   {% if result is not none %}

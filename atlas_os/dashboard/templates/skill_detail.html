@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}{{ skill.name }}{% endblock %}
 {% block heading %}{{ skill.name }}{% endblock %}
 {% block subhead %}
@@ -6,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-  <p><a class="btn-link" href="{{ url_for('skills') }}">← Back to skills</a></p>
+  <p><a class="btn-link" href="{{ url_for('skills') }}">{{ icons.icon("arrow-left", 14) }} Back to skills</a></p>
 
   <div class="meta-row">
     <span class="mono dim">{{ skill.slug }}</span>

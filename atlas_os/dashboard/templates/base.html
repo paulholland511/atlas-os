@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+{% import "_icons.html" as icons %}
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,17 +11,24 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">⛰</span>
-        <span class="brand-name">Atlas OS</span>
+        <span class="brand-mark">{{ icons.icon("mountain", 20) }}</span>
+        <span class="brand-text">
+          <span class="brand-name">Atlas OS</span>
+          <span class="brand-sub">dashboard</span>
+        </span>
       </div>
-      <nav>
+      <nav aria-label="Primary">
         {% for endpoint, label in nav %}
           <a href="{{ url_for(endpoint) }}"
-             class="{{ 'active' if active == endpoint else '' }}">{{ label }}</a>
+             class="nav-item {{ 'active' if active == endpoint else '' }}"
+             {{ 'aria-current=page' if active == endpoint else '' }}>
+            <span class="nav-icon">{{ icons.icon(endpoint, 18) }}</span>
+            <span class="nav-label">{{ label }}</span>
+          </a>
         {% endfor %}
       </nav>
       <div class="sidebar-foot">
-        <span class="dim">v{{ version }}</span>
+        <span class="tag">v{{ version }}</span>
         <span class="dim">local-first · read-only</span>
       </div>
     </aside>
@@ -28,7 +36,7 @@
     <main class="content">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="flashes">
+          <div class="flashes" role="status" aria-live="polite">
             {% for category, message in messages %}
               <div class="flash flash-{{ category }}">{{ message }}</div>
             {% endfor %}

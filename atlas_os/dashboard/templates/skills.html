@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Skills{% endblock %}
 {% block heading %}Skills{% endblock %}
 {% block subhead %}
@@ -24,7 +25,7 @@
           <div class="mono dim pack-skills">{{ pack.skills | join(', ') }}</div>
           <form method="post" action="{{ url_for('install_pack', name=pack.name) }}">
             <button type="submit" {{ 'disabled' if not overview.install_root else '' }}>
-              Install pack
+              {{ icons.icon("download", 16) }} Install pack
             </button>
           </form>
         </div>

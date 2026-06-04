@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}System health{% endblock %}
 {% block heading %}System health{% endblock %}
 {% block subhead %}
@@ -25,7 +26,7 @@
                 <span class="check-detail">{{ check.detail }}</span>
               </div>
               {% if check.next_step and check.status != 'OK' %}
-                <div class="check-next">→ {{ check.next_step }}</div>
+                <div class="check-next">{{ icons.icon("arrow-right", 14) }} {{ check.next_step }}</div>
               {% endif %}
             </div>
           </li>

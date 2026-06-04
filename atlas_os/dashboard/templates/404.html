@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Not found{% endblock %}
 {% block heading %}404 — not found{% endblock %}
 {% block content %}
   <div class="empty">
     <p>That page doesn't exist.</p>
-    <p><a class="btn-link" href="{{ url_for('health') }}">← Back to system health</a></p>
+    <p><a class="btn-link" href="{{ url_for('health') }}">{{ icons.icon("arrow-left", 14) }} Back to system health</a></p>
   </div>
 {% endblock %}

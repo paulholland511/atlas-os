@@ -331,28 +331,31 @@ inference. Force a specific one with `ATLAS_LLM_BACKEND=ollama`.
 
 ### Recommended — install the `atlas` command
 
+[Atlas OS is on PyPI](https://pypi.org/project/atlas-os/) — install it directly:
+
 ```bash
 # uv (fast, isolated):
-uv tool install "git+https://github.com/paulholland511/atlas-os"
+uv tool install atlas-os
 
 # …or pipx:
-pipx install "git+https://github.com/paulholland511/atlas-os"
+pipx install atlas-os
+
+# …or pip:
+pip install atlas-os
 ```
 
-> **Coming to PyPI.** Once Atlas OS is published, the git URL won't be needed —
-> `pipx install atlas-os` (or `uv tool install atlas-os`, `pip install atlas-os`)
-> will be the one-liner. The packaging is already PyPI-ready and releases are
-> automated: pushing a `v*` tag builds, tests, and publishes via GitHub Actions
-> + [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC,
-> no stored token). Until the first upload lands, use the git URL above. See
+> **Automated releases.** Each `v*` tag builds, tests, and publishes to PyPI via
+> GitHub Actions + [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+> (OIDC, no stored token). To track `main` ahead of a release, install from git:
+> `uv tool install "git+https://github.com/paulholland511/atlas-os"`. See
 > [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the release runbook.
 
 **With optional extras** (trading needs `yfinance`, PDF embedding needs
-`pdfplumber`):
+`pdfplumber`, the web dashboard needs `flask`):
 
 ```bash
-uv tool install "atlas-os[trading,pdf] @ git+https://github.com/paulholland511/atlas-os"
-# extras: [trading]  [pdf]  [all]
+uv tool install "atlas-os[dashboard,trading,pdf]"
+# extras: [dashboard]  [trading]  [pdf]  [vector]  [all]
 ```
 
 ### From a source checkout (for development)
@@ -1076,8 +1079,9 @@ More: [`docs/FAQ.md`](docs/FAQ.md). For a clean rebuild:
 
 ## Roadmap
 
-**[v2.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/2)** —
-the next-generation Atlas OS (contributions welcome):
+The **[v2.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/2)**
+is **complete** — every item below shipped in v2.0.0 (contributions still welcome
+for what's next):
 
 - ✅ **SQLite vector store** ([#10](https://github.com/paulholland511/atlas-os/issues/10)) —
   production-scale RAG: `vectors.db` with `sqlite-vec` KNN, incremental
@@ -1101,8 +1105,10 @@ the next-generation Atlas OS (contributions welcome):
 
 Further out:
 
-- **PyPI release** — the packaging is ready ([`docs/PUBLISHING.md`](docs/PUBLISHING.md));
-  once published, `pipx install atlas-os` works without the git URL.
+- ✅ **PyPI release** — [Atlas OS is on PyPI](https://pypi.org/project/atlas-os/):
+  `pipx install atlas-os` (or `uv tool install atlas-os` / `pip install atlas-os`),
+  published automatically on every `v*` tag via Trusted Publishing
+  ([`docs/PUBLISHING.md`](docs/PUBLISHING.md)). *Shipped.*
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
 
 Recently shipped: the SQLite vector store and the advanced RAG pipeline (above),

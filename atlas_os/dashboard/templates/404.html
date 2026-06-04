@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Not found{% endblock %}
+{% block heading %}404 — not found{% endblock %}
+{% block content %}
+  <div class="empty">
+    <p>That page doesn't exist.</p>
+    <p><a class="btn-link" href="{{ url_for('health') }}">← Back to system health</a></p>
+  </div>
+{% endblock %}

@@ -18,6 +18,7 @@ Subcommands:
 * ``atlas schemas``  — enforce frontmatter     (wraps schemas/enforce_schemas.py)
 * ``atlas session``  — save Cowork transcripts (wraps scripts/save_sessions.py)
 * ``atlas audit``    — inspect the append-only audit trail (show | tail | export)
+* ``atlas dashboard``— launch the local web dashboard (needs the dashboard extra)
 
 Every script-wrapping command appends an entry to the audit trail (see
 ``atlas_os.audit``) recording what ran, how it was triggered, the outcome,
@@ -1690,6 +1691,54 @@ def doctor(
 
     if any(c.status == "FAIL" for c in results):
         raise typer.Exit(code=1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# dashboard — the lightweight local web UI
+# ─────────────────────────────────────────────────────────────────────────────
+@app.command()
+def dashboard(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Interface to bind (default localhost only)."
+    ),
+    port: int = typer.Option(8501, "--port", "-p", help="Port to serve on."),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open", help="Open the dashboard in your browser."
+    ),
+    debug: bool = typer.Option(
+        False, "--debug", help="Run Flask in debug mode (auto-reload, tracebacks)."
+    ),
+) -> None:
+    """Launch the local web dashboard (health, audit, skills, vectors, search).
+
+    A minimal, local-first Flask UI over the data ``atlas`` already exposes —
+    system health, the audit trail, scheduled tasks, the skills catalog,
+    vector-store stats, and RAG search. It reads from your machine only; bind it
+    to localhost and never expose it publicly with vault data behind it.
+
+    Needs the optional dashboard extra: ``pip install 'atlas-os[dashboard]'``.
+    """
+    try:
+        from atlas_os.dashboard.app import create_app
+    except ModuleNotFoundError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    flask_app = create_app()
+    url = f"http://{host}:{port}"
+    typer.secho(f"\n  ⛰  Atlas OS dashboard → {url}", fg=typer.colors.CYAN, bold=True)
+    typer.echo("  Local-first and read-only. Press Ctrl+C to stop.\n")
+
+    # Open the browser once, after a short delay so the server is accepting
+    # connections. Skipped under --debug (the reloader spawns a child process,
+    # which would otherwise open a second tab).
+    if open_browser and not debug:
+        import threading
+        import webbrowser
+
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    flask_app.run(host=host, port=port, debug=debug)
 
 
 if __name__ == "__main__":

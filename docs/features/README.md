@@ -17,6 +17,7 @@ setup and the command reference, see [`docs/SETUP.md`](../SETUP.md) and
 | Email reports | [email-reports.md](email-reports.md) | `scripts/send_email.py` | `atlas email` |
 | Trading research SDK *(optional)* | [trading-sdk.md](trading-sdk.md) | `trading/`, `scripts/trading_briefing.py` | — |
 | Health check & dashboard | [health-and-dashboard.md](health-and-dashboard.md) | `scripts/health_check.py`, `templates/ops-dashboard.html` | `atlas health`, `atlas doctor` |
+| Web dashboard | [dashboard.md](dashboard.md) | `atlas_os/dashboard/` | `atlas dashboard` |
 
 ## How the features fit together
 

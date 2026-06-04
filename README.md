@@ -821,10 +821,26 @@ this for you.
 
 ## Dashboard (optional)
 
-A self-contained, single-file HTML dashboard ships at
-[`templates/ops-dashboard.html`](templates/ops-dashboard.html) — open it in a
-browser. It expects two optional local JSON endpoints you can back with a ~30-line
-shim:
+A lightweight, local-first **web dashboard** ships in the box. Install the extra
+and launch it:
+
+```bash
+pip install 'atlas-os[dashboard]'
+atlas dashboard                 # serves http://127.0.0.1:8501
+```
+
+Six panels, read live from the same modules the CLI uses (no second source of
+truth): **system health** (`atlas doctor` with green/amber/red indicators), a
+paginated **audit trail** browser, **scheduled tasks** with last-run status, a
+**skills** manager with one-click pack installs, **vector-store stats** (chunks,
+files, DB size, last embed), and **RAG search**. Flask + Jinja2 only — no
+JavaScript framework, no build step. Details:
+[`docs/features/dashboard.md`](docs/features/dashboard.md).
+
+Prefer to embed the data in your own page? A self-contained, single-file HTML
+dashboard also ships at
+[`templates/ops-dashboard.html`](templates/ops-dashboard.html); it expects two
+optional local JSON endpoints you can back with a ~30-line shim:
 
 | Endpoint | Produced by |
 |---|---|
@@ -1036,8 +1052,10 @@ the next-generation Atlas OS (contributions welcome):
 - ✅ **Advanced RAG pipeline** ([#11](https://github.com/paulholland511/atlas-os/issues/11)) —
   semantic chunking, hybrid BM25 + vector search, TF-IDF reranking, embedding
   cache, metadata filtering, and the `atlas search` command. *Shipped.*
-- **Open-source lightweight dashboard** ([#12](https://github.com/paulholland511/atlas-os/issues/12)) —
-  health, audit trail, scheduled-task status, skill management, backend status.
+- ✅ **Open-source lightweight dashboard** ([#12](https://github.com/paulholland511/atlas-os/issues/12)) —
+  a local-first Flask web UI: system health, audit trail, scheduled-task status,
+  skill management, vector-store stats, and RAG search. Launch with
+  `atlas dashboard` (`pip install 'atlas-os[dashboard]'`). *Shipped.*
 - ✅ **Skills marketplace / registry** ([#13](https://github.com/paulholland511/atlas-os/issues/13)) —
   share, discover, and install community skills: a JSON registry, `atlas skills
   search`, schema-validated `atlas skills publish` packaging, custom registries,
@@ -1052,9 +1070,9 @@ Further out:
 - **Nix flake** — `nix run github:paulholland511/atlas-os` for a hermetic install.
 
 Recently shipped: the SQLite vector store and the advanced RAG pipeline (above),
-the skills marketplace (`atlas skills search` / `publish` / `registry`), an
-append-only audit trail, and `atlas skills install` for one-command skill
-deployment with placeholder substitution.
+the `atlas dashboard` web UI, the skills marketplace (`atlas skills search` /
+`publish` / `registry`), an append-only audit trail, and `atlas skills install`
+for one-command skill deployment with placeholder substitution.
 
 ---
 

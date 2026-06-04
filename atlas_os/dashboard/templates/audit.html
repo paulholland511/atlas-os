@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Audit trail{% endblock %}
+{% block heading %}Audit trail{% endblock %}
+{% block subhead %}
+  <p class="lede">Every autonomous action Atlas has run — newest first. {{ page.total }} entr{{ 'y' if page.total == 1 else 'ies' }} match.</p>
+{% endblock %}
+
+{% block content %}
+  <form class="filters" method="get" action="{{ url_for('audit') }}">
+    <label>
+      Action
+      <select name="action">
+        <option value="">All actions</option>
+        {% for a in page.actions %}
+          <option value="{{ a }}" {{ 'selected' if a == action else '' }}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Since
+      <input type="text" name="since" value="{{ since }}" placeholder="24h · 7d · 2026-06-01">
+    </label>
+    <button type="submit">Filter</button>
+    {% if action or since %}
+      <a class="btn-link" href="{{ url_for('audit') }}">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if page.entries %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Action</th>
+          <th>Trigger</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Changes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in page.entries %}
+          {% set status = e.get('status', '') %}
+          {% set state = {'success': 'ok', 'error': 'fail', 'skipped': 'warn'}.get(status, 'warn') %}
+          <tr>
+            <td class="mono dim">{{ (e.get('timestamp') or '')[:19] | replace('T', ' ') }}</td>
+            <td class="mono">{{ e.get('action', '?') }}</td>
+            <td>{{ e.get('trigger', '?') }}</td>
+            <td><span class="badge badge-{{ state }}">{{ status or '?' }}</span></td>
+            <td class="mono dim">
+              {% set d = e.get('duration_seconds') %}
+              {{ '%.2fs' % d if d is not none else '—' }}
+            </td>
+            <td>
+              {% set changes = e.get('changes') or [] %}
+              {% if changes %}{{ changes | join(', ') }}{% else %}<span class="dim">—</span>{% endif %}
+              {% if status == 'error' and e.get('error') %}
+                <div class="err-detail">{{ (e.get('error') or '').splitlines()[0] }}</div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if page.pages > 1 %}
+      <nav class="pager">
+        {% if page.page > 1 %}
+          <a href="{{ url_for('audit', page=page.page - 1, action=action, since=since) }}">← Newer</a>
+        {% else %}<span class="dim">← Newer</span>{% endif %}
+        <span class="dim">Page {{ page.page }} of {{ page.pages }}</span>
+        {% if page.page < page.pages %}
+          <a href="{{ url_for('audit', page=page.page + 1, action=action, since=since) }}">Older →</a>
+        {% else %}<span class="dim">Older →</span>{% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <div class="empty">No audit entries match these filters.</div>
+  {% endif %}
+{% endblock %}

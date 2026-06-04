@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ skill.name }}{% endblock %}
+{% block heading %}{{ skill.name }}{% endblock %}
+{% block subhead %}
+  <p class="lede">{{ skill.description }}</p>
+{% endblock %}
+
+{% block content %}
+  <p><a class="btn-link" href="{{ url_for('skills') }}">← Back to skills</a></p>
+
+  <div class="meta-row">
+    <span class="mono dim">{{ skill.slug }}</span>
+    <span class="badge badge-info">{{ skill.cadence }}</span>
+    {% if skill.installed %}
+      <span class="badge badge-ok">installed</span>
+    {% else %}
+      <span class="badge badge-warn">not installed</span>
+    {% endif %}
+  </div>
+
+  <p class="note">Install with <code>atlas skills install {{ skill.slug }}</code>.</p>
+
+  <section class="card">
+    <h2>SKILL.md</h2>
+    {% if skill.body %}
+      <pre class="skill-source">{{ skill.body }}</pre>
+    {% else %}
+      <div class="empty">No SKILL.md found for this skill.</div>
+    {% endif %}
+  </section>
+{% endblock %}

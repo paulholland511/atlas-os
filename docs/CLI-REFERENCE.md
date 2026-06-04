@@ -103,6 +103,7 @@ atlas-os 0.3.0
 | [`atlas skills`](#atlas-skills) | List, show, and install the agent skills, individually or as packs. |
 | [`atlas backends`](#atlas-backends) | Show detected LLM backends; `test` runs an inference. |
 | [`atlas audit`](#atlas-audit) | Inspect the append-only audit trail. |
+| [`atlas dashboard`](#atlas-dashboard) | Launch the local web dashboard *(needs the `dashboard` extra)*. |
 | [`atlas schemas`](#atlas-schemas) | Enforce per-folder frontmatter schemas. |
 | [`atlas session`](#atlas-session) | Save Cowork chat transcripts to the vault. |
 
@@ -770,6 +771,45 @@ atlas audit tail
 atlas audit export --format csv -o audit-report.csv
 atlas audit export --format json --since 30d
 ```
+
+---
+
+### `atlas dashboard`
+
+Launch the lightweight local web dashboard — system health, the audit trail,
+scheduled tasks, the skills catalog, vector-store stats, and RAG search — in a
+clean dark theme. Implemented in the CLI (`atlas_os/dashboard/`); reads live from
+the same modules the other commands use, so it's a *view*, never a second source
+of truth.
+
+Needs the optional dashboard extra (Flask + Jinja2, no client-side framework):
+
+```bash
+pip install 'atlas-os[dashboard]'
+```
+
+If the extra isn't installed, the command prints a one-line install hint and
+exits rather than throwing a traceback.
+
+**Usage**
+
+```text
+atlas dashboard [--host HOST] [--port PORT] [--open/--no-open] [--debug]
+```
+
+**Flags**
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--host` | `HOST` | Interface to bind. Default `127.0.0.1` (localhost only) — keep it there. |
+| `--port`, `-p` | `PORT` | Port to serve on. Default `8501`. |
+| `--open` / `--no-open` | — | Open (or don't open) a browser tab on start. Default `--open`. |
+| `--debug` | — | Flask debug mode: auto-reload and in-browser tracebacks. |
+
+**Privacy.** The dashboard binds to localhost and is read-only apart from the
+skill-pack install buttons (which write only into your scheduled-tasks
+directory). Never expose it on a public interface with vault data behind it. See
+[`features/dashboard.md`](features/dashboard.md).
 
 ---
 

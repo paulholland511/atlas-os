@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}RAG search{% endblock %}
+{% block heading %}RAG search{% endblock %}
+{% block subhead %}
+  <p class="lede">Hybrid BM25 + vector search over your vault — the same engine as <code>atlas search</code>.</p>
+{% endblock %}
+
+{% block content %}
+  <form class="search-form" method="get" action="{{ url_for('search') }}">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search your vault…" autofocus>
+    <select name="mode">
+      {% for m in ['hybrid', 'vector', 'keyword'] %}
+        <option value="{{ m }}" {{ 'selected' if m == mode else '' }}>{{ m }}</option>
+      {% endfor %}
+    </select>
+    <select name="top_k">
+      {% for k in [5, 10, 20] %}
+        <option value="{{ k }}" {{ 'selected' if k == top_k else '' }}>top {{ k }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Search</button>
+  </form>
+
+  {% if result is not none %}
+    {% if not result.ok %}
+      <div class="flash flash-error">{{ result.error }}</div>
+      <p class="note">
+        Hybrid and vector search need the embeddings endpoint running. Try
+        <code>mode: keyword</code> for offline BM25 search.
+      </p>
+    {% elif result.results %}
+      <p class="note">{{ result.results | length }} result{{ '' if result.results | length == 1 else 's' }} for “{{ result.query }}” ({{ result.mode }}).</p>
+      <ol class="results">
+        {% for r in result.results %}
+          <li class="result">
+            <div class="result-head">
+              <span class="score">{{ '%.3f' % r.score }}</span>
+              <span class="result-file mono">{{ r.file }}{% if r.heading %} › {{ r.heading }}{% endif %}</span>
+            </div>
+            <p class="result-snippet">{{ r.snippet }}</p>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="empty">No results for “{{ result.query }}”.</div>
+    {% endif %}
+  {% endif %}
+{% endblock %}

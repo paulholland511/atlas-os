@@ -40,7 +40,10 @@ trading = ["yfinance>=0.2"]
 # brute-force cosine scan, so this extra is optional. NumPy further speeds the
 # fallback when present.
 vector = ["sqlite-vec>=0.1.6", "numpy>=1.24"]
-all = ["pdfplumber>=0.10", "yfinance>=0.2", "sqlite-vec>=0.1.6", "numpy>=1.24"]
+# The local web dashboard (`atlas dashboard`). Flask + Jinja2 only — no JS build
+# step, no client-side framework. Kept optional so the core install stays slim.
+dashboard = ["flask>=3.0"]
+all = ["pdfplumber>=0.10", "yfinance>=0.2", "sqlite-vec>=0.1.6", "numpy>=1.24", "flask>=3.0"]
 
 [project.urls]
 Homepage = "https://github.com/paulholland511/atlas-os"

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Scheduled tasks{% endblock %}
+{% block heading %}Scheduled tasks{% endblock %}
+{% block subhead %}
+  <p class="lede">Schedulable automations and their last recorded run (matched from the audit trail).</p>
+{% endblock %}
+
+{% block content %}
+  {% if tasks %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Cadence</th>
+          <th>Installed</th>
+          <th>Last run</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tasks %}
+          <tr>
+            <td>
+              <a href="{{ url_for('skill_detail', slug=t.slug) }}">{{ t.name }}</a>
+              <div class="mono dim">{{ t.slug }}</div>
+            </td>
+            <td>{{ t.cadence }}</td>
+            <td>
+              {% if t.installed %}
+                <span class="badge badge-ok">installed</span>
+              {% else %}
+                <span class="badge badge-warn">not installed</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if t.last_run %}
+                <span class="badge badge-{{ t.last_run.state }}">{{ t.last_run.status }}</span>
+                <span class="mono dim">{{ t.last_run.timestamp }}</span>
+                <span class="dim">({{ t.last_run.trigger }})</span>
+              {% else %}
+                <span class="dim">no recorded run</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">
+      Install a task with <code>atlas skills install &lt;slug&gt;</code>, then register it on
+      its cadence — see <code>docs/SCHEDULED-TASKS.md</code>.
+    </p>
+  {% else %}
+    <div class="empty">No schedulable skills found in this install.</div>
+  {% endif %}
+{% endblock %}

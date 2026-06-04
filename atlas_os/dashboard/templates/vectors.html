@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Vector store{% endblock %}
+{% block heading %}Vector store{% endblock %}
+{% block subhead %}
+  <p class="lede">The SQLite RAG index that powers <code>atlas search</code>.</p>
+{% endblock %}
+
+{% block content %}
+  {% if stats.available %}
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-value">{{ '{:,}'.format(stats.chunk_count) }}</span>
+        <span class="stat-label">Chunks</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{{ '{:,}'.format(stats.file_count) }}</span>
+        <span class="stat-label">Files indexed</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{{ stats.db_size }}</span>
+        <span class="stat-label">Database size</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{{ '{:,}'.format(stats.cache_size) }}</span>
+        <span class="stat-label">Cached embeddings</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Details</h2>
+      <dl class="detail-list">
+        <dt>Search backend</dt><dd>{{ stats.backend }}</dd>
+        <dt>Last embed</dt>
+        <dd>
+          {% if stats.last_embed %}
+            {{ stats.last_embed.iso }}
+            <span class="badge badge-{{ 'warn' if stats.last_embed.stale else 'ok' }}">
+              {{ stats.last_embed.age }}{{ ' · stale' if stats.last_embed.stale else '' }}
+            </span>
+          {% else %}
+            <span class="dim">unknown</span>
+          {% endif %}
+        </dd>
+        <dt>Database path</dt><dd class="mono dim">{{ stats.db_path }}</dd>
+      </dl>
+    </section>
+  {% else %}
+    <div class="empty">
+      <p>{{ stats.reason }}</p>
+      {% if stats.rag_dir %}<p class="mono dim">{{ stats.rag_dir }}</p>{% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

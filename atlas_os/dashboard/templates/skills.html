@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Skills{% endblock %}
+{% block heading %}Skills{% endblock %}
+{% block subhead %}
+  <p class="lede">The agent skills shipped with this install, and the curated packs that bundle them.</p>
+{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <h2>Skill packs</h2>
+    <p class="note">
+      Install a whole workflow at once. Skills land in
+      {% if overview.install_root %}<code>{{ overview.install_root }}</code>{% else %}
+      your scheduled-tasks directory (<code>VAULT_PATH</code> not set — set it to enable installs){% endif %}.
+    </p>
+    <div class="pack-grid">
+      {% for pack in overview.packs %}
+        <div class="pack">
+          <div class="pack-head">
+            <span class="pack-name">{{ pack.name }}</span>
+            <span class="dim">{{ pack.skills | length }} skill{{ '' if pack.skills | length == 1 else 's' }}</span>
+          </div>
+          <p class="pack-desc">{{ pack.description }}</p>
+          <div class="mono dim pack-skills">{{ pack.skills | join(', ') }}</div>
+          <form method="post" action="{{ url_for('install_pack', name=pack.name) }}">
+            <button type="submit" {{ 'disabled' if not overview.install_root else '' }}>
+              Install pack
+            </button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>All skills ({{ overview.skills | length }})</h2>
+    <table class="data-table">
+      <thead>
+        <tr><th>Skill</th><th>What it does</th><th>Cadence</th><th>Installed</th></tr>
+      </thead>
+      <tbody>
+        {% for s in overview.skills %}
+          <tr>
+            <td><a href="{{ url_for('skill_detail', slug=s.slug) }}">{{ s.name }}</a></td>
+            <td class="desc-cell">{{ s.description }}</td>
+            <td>{{ s.cadence }}</td>
+            <td>
+              {% if s.installed %}
+                <span class="badge badge-ok">yes</span>
+              {% else %}
+                <span class="dim">no</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

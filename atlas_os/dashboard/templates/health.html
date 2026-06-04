@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}System health{% endblock %}
+{% block heading %}System health{% endblock %}
+{% block subhead %}
+  <p class="lede">The live <code>atlas doctor</code> report — Config, Git, LLM, RAG, and SMTP.</p>
+{% endblock %}
+
+{% block content %}
+  <div class="summary-bar state-{{ report.overall }}">
+    <span class="pill pill-ok">{{ report.summary.ok }} OK</span>
+    <span class="pill pill-warn">{{ report.summary.warn }} WARN</span>
+    <span class="pill pill-fail">{{ report.summary.fail }} FAIL</span>
+  </div>
+
+  {% for category in report.categories %}
+    <section class="card">
+      <h2>{{ category.name }}</h2>
+      <ul class="check-list">
+        {% for check in category.checks %}
+          <li class="check check-{{ check.state }}">
+            <span class="dot" aria-hidden="true"></span>
+            <div class="check-body">
+              <div class="check-line">
+                <span class="check-name">{{ check.name }}</span>
+                <span class="check-detail">{{ check.detail }}</span>
+              </div>
+              {% if check.next_step and check.status != 'OK' %}
+                <div class="check-next">→ {{ check.next_step }}</div>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endfor %}
+{% endblock %}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Atlas OS{% endblock %} · Atlas OS</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">⛰</span>
+        <span class="brand-name">Atlas OS</span>
+      </div>
+      <nav>
+        {% for endpoint, label in nav %}
+          <a href="{{ url_for(endpoint) }}"
+             class="{{ 'active' if active == endpoint else '' }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-foot">
+        <span class="dim">v{{ version }}</span>
+        <span class="dim">local-first · read-only</span>
+      </div>
+    </aside>
+
+    <main class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flashes">
+            {% for category, message in messages %}
+              <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <header class="page-head">
+        <h1>{% block heading %}{% endblock %}</h1>
+        {% block subhead %}{% endblock %}
+      </header>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

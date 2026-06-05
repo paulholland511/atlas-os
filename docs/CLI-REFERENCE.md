@@ -99,6 +99,8 @@ atlas-os 0.3.0
 | [`atlas migrate-vectors`](#atlas-migrate-vectors) | Migrate the vector store between backends (`--to`) or import a legacy `vectors.json`. |
 | [`atlas commit`](#atlas-commit) | Auto-commit the vault with a categorised message. |
 | [`atlas changelog`](#atlas-changelog) | Summarise vault changes over a time window. |
+| [`atlas sync`](#atlas-sync) | Safely pull remote vault changes with a favour-local merge. |
+| [`atlas validate`](#atlas-validate) | Validate YAML frontmatter across the vault (or staged files). |
 | [`atlas graph`](#atlas-graph) | Rebuild the wikilink knowledge graph. |
 | [`atlas email`](#atlas-email) | Send an email via SMTP. |
 | [`atlas trading`](#atlas-trading) | Generate a trading research briefing *(bundled extension)*. |
@@ -111,8 +113,8 @@ atlas-os 0.3.0
 | [`atlas session`](#atlas-session) | Save Cowork chat transcripts to the vault. |
 | [`atlas extensions`](#atlas-extensions) | List and inspect the optional extensions plugged into Atlas OS. |
 
-**CLI-native vs. script-wrapping.** `init`, `doctor`, `skills`, `backends`, and
-`audit` are implemented in the CLI itself. The rest forward their flags 1:1 to a
+**CLI-native vs. script-wrapping.** `init`, `doctor`, `skills`, `backends`,
+`audit`, `sync`, and `validate` are implemented in the CLI itself. The rest forward their flags 1:1 to a
 script under `scripts/` (or `schemas/`), so you can also run those directly,
 e.g. `python3 scripts/embed_vault.py --full`. Every script-wrapping command
 appends an entry to the [audit trail](#atlas-audit) recording what ran, how it
@@ -181,6 +183,9 @@ red FAIL), and every non-OK row prints an actionable **next step**:
 - **Config** — Python version (≥ 3.11) and `VAULT_PATH` (set + exists).
 - **Git** — whether the vault is a git repo, plus detection of stale
   `index.lock` / `HEAD.lock` / ref locks left by an interrupted git process.
+- **Sync** — the last successful `atlas sync` from the audit trail, plus any
+  files left in an unresolved merge-conflict state (see
+  [git-hardening.md](features/git-hardening.md)).
 - **LLM** — probes the active (or `ATLAS_LLM_BACKEND`-forced) backend. If it's
   down, shows a clear diagnosis (*"LM Studio at host:port is not responding. Is
   it running?"*) and lists any reachable backends as alternatives. Also checks
@@ -480,6 +485,82 @@ atlas changelog [--since WINDOW] [--markdown] [--json]
 atlas changelog
 atlas changelog --since "7 days ago" --markdown
 atlas changelog --since 2026-06-01 --json
+```
+
+---
+
+### `atlas sync`
+
+Safely pull remote vault changes with a **favour-local** merge. Uses
+`git merge -X ours` so an automated or remote change never overwrites a
+concurrent human edit; an unresolvable conflict aborts the merge (your working
+tree is left untouched) and is reported. Stale git locks are cleared first, and
+every outcome is written to the [audit trail](#atlas-audit). See
+[git-hardening.md](features/git-hardening.md).
+
+**Usage**
+
+```text
+atlas sync [--remote NAME] [--branch NAME] [--json]
+```
+
+**Flags**
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--remote` | `NAME` | Remote to pull from (default `origin`). |
+| `--branch` | `NAME` | Branch to sync (defaults to the current branch). |
+| `--json` | | Emit the sync result as JSON. |
+| `--help` | | Show help and exit. |
+
+**Environment variables** — requires `VAULT_PATH`; the vault must be a git repo
+with a remote.
+
+**Exit codes** — `0` synced / up-to-date / skipped; `1` unresolved conflict or
+git error; `2` `VAULT_PATH` unset.
+
+**Examples**
+
+```bash
+atlas sync
+atlas sync --remote origin --branch main
+atlas sync --json
+```
+
+---
+
+### `atlas validate`
+
+Validate YAML frontmatter across the vault — the same gate that runs before every
+automated commit. Flags broken YAML, unterminated frontmatter blocks, missing
+required keys, and malformed dates.
+
+**Usage**
+
+```text
+atlas validate [--staged] [--require KEYS] [--json]
+```
+
+**Flags**
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--staged` | | Validate only git-staged files (use as a pre-commit hook). |
+| `--require` | `KEYS` | Comma-separated frontmatter keys that must be present. |
+| `--json` | | Emit the validation report as JSON. |
+| `--help` | | Show help and exit. |
+
+**Environment variables** — requires `VAULT_PATH`.
+
+**Exit codes** — `0` all files valid; `1` one or more files have invalid
+frontmatter; `2` `VAULT_PATH` unset.
+
+**Examples**
+
+```bash
+atlas validate
+atlas validate --staged
+atlas validate --require id,title --json
 ```
 
 ---

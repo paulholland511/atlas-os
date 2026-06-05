@@ -13,6 +13,7 @@ setup and the command reference, see [`docs/SETUP.md`](../SETUP.md) and
 | Pluggable vector backends | [vector-backends.md](vector-backends.md) | `atlas_os/vector_backend.py`, `atlas_os/vector_backends/` | `atlas migrate-vectors --to` |
 | Knowledge graph | [knowledge-graph.md](knowledge-graph.md) | `scripts/build_graph.py` | `atlas graph` |
 | Git automation | [git-automation.md](git-automation.md) | `scripts/vault_commit.py`, `vault_changelog.py` | `atlas commit`, `atlas changelog` |
+| Git sync hardening (safe merge, validation, locking) | [git-hardening.md](git-hardening.md) | `atlas_os/git_sync.py`, `frontmatter.py`, `filelock.py` | `atlas sync`, `atlas validate` |
 | Scheduled tasks & skills catalog | [skills-and-automation.md](skills-and-automation.md) | `skills/`, `atlas_os/_skills.py` | `atlas skills` |
 | Skills marketplace / registry | [skills-marketplace.md](skills-marketplace.md) | `atlas_os/marketplace.py`, `skills/registry.json` | `atlas skills search`, `publish`, `registry` |
 | MCP skills (Model Context Protocol) | [mcp-skills.md](mcp-skills.md) | `atlas_os/mcp_server.py`, `mcp_client.py`, `mcp_skill.py` | `atlas mcp serve`, `atlas mcp list-tools`, `atlas skills run` |

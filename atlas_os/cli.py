@@ -56,7 +56,7 @@ from dotenv import load_dotenv
 
 from atlas_os import __version__, audit
 from atlas_os import backends as llm_backends
-from atlas_os import fileio, gitutil
+from atlas_os import fileio, frontmatter, git_sync, gitutil
 from atlas_os import _skills, marketplace, packs, security
 from atlas_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from atlas_os._probe import Endpoint, detect_endpoints
@@ -491,6 +491,124 @@ def changelog(ctx: typer.Context) -> None:
     _require_env("VAULT_PATH")
     _run_audited("changelog", scripts_dir() / "vault_changelog.py", ctx.args,
                  _context_for("changelog", ctx.args))
+
+
+@app.command()
+def sync(
+    remote: str = typer.Option("origin", "--remote", help="Remote to pull from."),
+    branch: str = typer.Option(
+        None, "--branch", help="Branch to sync (defaults to the current branch)."
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the sync result as JSON."
+    ),
+) -> None:
+    """Safely pull remote vault changes with a favour-local merge.
+
+    Uses ``git merge -X ours`` so an automated or remote change never silently
+    overwrites a concurrent human edit. A true conflict that cannot be
+    auto-resolved aborts the merge — your working tree is left exactly as it was
+    — and is reported for you to resolve. Stale git locks left by a crashed run
+    are cleared first, and every outcome is written to the audit trail.
+    """
+    _require_env("VAULT_PATH")
+    vault = _resolve_vault()
+    assert vault is not None  # _require_env guarantees VAULT_PATH is set
+    result = git_sync.safe_sync(vault, remote=remote, branch=branch)
+
+    if as_json:
+        typer.echo(json.dumps({
+            "status": result.status,
+            "message": result.message,
+            "conflicts": list(result.conflicts),
+            "locks_cleared": list(result.locks_cleared),
+            "merged_commit": result.merged_commit,
+        }, indent=2))
+        raise typer.Exit(code=0 if result.ok else 1)
+
+    if result.locks_cleared:
+        _echo_warn(f"cleared stale git lock(s): {', '.join(result.locks_cleared)}")
+    if result.status == "synced":
+        _echo_ok(result.message)
+    elif result.status == "up_to_date":
+        _echo_ok(result.message)
+    elif result.status == "conflict":
+        _echo_fail(result.message)
+        for path in result.conflicts:
+            typer.echo(f"      conflict: {path}")
+        typer.secho(
+            "      → resolve by hand, then re-run `atlas sync`.",
+            fg=typer.colors.CYAN,
+        )
+    elif result.status == "skipped":
+        _echo_warn(result.message)
+    else:
+        _echo_fail(result.message)
+    raise typer.Exit(code=0 if result.ok or result.status == "skipped" else 1)
+
+
+def _vault_markdown(vault: Path) -> list[Path]:
+    """All Markdown notes in ``vault``, skipping dotted dirs (``.git``, ``.rag``…)."""
+    out: list[Path] = []
+    for path in sorted(vault.rglob("*.md")):
+        if any(part.startswith(".") for part in path.relative_to(vault).parts):
+            continue
+        out.append(path)
+    return out
+
+
+@app.command()
+def validate(
+    staged: bool = typer.Option(
+        False, "--staged",
+        help="Only validate git-staged files (the pre-commit gate).",
+    ),
+    require: str = typer.Option(
+        None, "--require",
+        help="Comma-separated frontmatter keys that must be present.",
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the validation report as JSON."
+    ),
+) -> None:
+    """Validate YAML frontmatter across the vault (or just staged files).
+
+    Flags broken YAML, unterminated frontmatter blocks, missing required keys,
+    and malformed dates — the same checks that gate every automated commit. With
+    ``--staged`` it validates only what is staged in git (use it as a pre-commit
+    hook); otherwise it scans every note. Exits non-zero if any file is invalid.
+    """
+    _require_env("VAULT_PATH")
+    vault = _resolve_vault()
+    assert vault is not None  # _require_env guarantees VAULT_PATH is set
+    required_keys = (
+        tuple(k.strip() for k in require.split(",") if k.strip()) if require else ()
+    )
+    files = None if staged else _vault_markdown(vault)
+    report = frontmatter.validate_before_commit(
+        vault, files=files, required=required_keys
+    )
+
+    if as_json:
+        typer.echo(json.dumps({
+            "ok": report.ok,
+            "checked": len(report.results),
+            "failures": [
+                {"file": str(r.file_path), "errors": list(r.errors)}
+                for r in report.failures
+            ],
+        }, indent=2))
+        raise typer.Exit(code=0 if report.ok else 1)
+
+    if report.ok:
+        _echo_ok(f"frontmatter valid in all {len(report.results)} file(s)")
+        raise typer.Exit(code=0)
+    for failure in report.failures:
+        _echo_fail(str(failure.file_path))
+        for err in failure.errors:
+            typer.echo(f"      → {err}")
+    _echo_fail(f"{len(report.failures)} file(s) with invalid frontmatter")
+    raise typer.Exit(code=1)
 
 
 @app.command(context_settings=_PASSTHROUGH)
@@ -1612,7 +1730,7 @@ def backends(
 # ─────────────────────────────────────────────────────────────────────────────
 # Display order for the grouped report; any check whose category is missing here
 # is appended after the known ones.
-_DOCTOR_CATEGORIES: tuple[str, ...] = ("Config", "Git", "LLM", "RAG", "SMTP")
+_DOCTOR_CATEGORIES: tuple[str, ...] = ("Config", "Git", "Sync", "LLM", "RAG", "SMTP")
 
 # Re-embed once the index is older than this (point 4 of the doctor spec).
 _RAG_STALE_AFTER = 24 * 3600.0
@@ -1795,6 +1913,47 @@ def _git_checks() -> list[Check]:
     return checks
 
 
+def _sync_checks() -> list[Check]:
+    """Vault sync health: last successful sync and any unresolved merge conflicts.
+
+    Empty unless the vault is a git repo. Reads the last successful ``sync``
+    action from the audit trail and inspects the working tree for conflict
+    markers left by a merge that needs a human.
+    """
+    vault_env = os.environ.get("VAULT_PATH")
+    if not vault_env:
+        return []
+    vault = Path(os.path.expanduser(vault_env))
+    if not vault.is_dir() or not (vault / ".git").is_dir():
+        return []
+
+    checks: list[Check] = []
+    successful = [
+        e for e in audit.read_audit(action="sync", limit=100)
+        if e.get("status") == "success"
+    ]
+    if successful:
+        stamp = str(successful[-1].get("timestamp", "?"))
+        checks.append(Check("Sync", "Last sync", "OK", f"last succeeded {stamp}"))
+    else:
+        checks.append(Check(
+            "Sync", "Last sync", "WARN", "no successful sync recorded yet",
+            next_step="run `atlas sync` to pull remote changes safely",
+        ))
+
+    conflicts = git_sync.pending_conflicts(vault)
+    if conflicts:
+        shown = ", ".join(conflicts[:3]) + ("…" if len(conflicts) > 3 else "")
+        checks.append(Check(
+            "Sync", "Conflicts", "FAIL",
+            f"{len(conflicts)} unresolved conflict(s): {shown}",
+            next_step="resolve the conflict markers by hand, then commit",
+        ))
+    else:
+        checks.append(Check("Sync", "Conflicts", "OK", "no pending conflicts"))
+    return checks
+
+
 def _llm_checks() -> list[Check]:
     """Probe the active LLM backend, diagnose if it's down, list alternatives."""
     try:
@@ -1964,6 +2123,7 @@ def _doctor_results(now: float | None = None) -> list[Check]:
     results: list[Check] = []
     results.extend(_config_checks())
     results.extend(_git_checks())
+    results.extend(_sync_checks())
     results.extend(_llm_checks())
     results.extend(_rag_checks(when))
     results.extend(_smtp_checks())

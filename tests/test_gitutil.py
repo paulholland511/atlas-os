@@ -72,6 +72,48 @@ class TestFindStaleLocks:
         assert gitutil.find_stale_locks(tmp_path) == []
 
 
+class TestCleanStaleLocks:
+    def _make_lock(self, repo: Path, name: str, age_seconds: float) -> Path:
+        import os
+        import time
+
+        lock = repo / ".git" / name
+        lock.write_text("", encoding="utf-8")
+        stamp = time.time() - age_seconds
+        os.utime(lock, (stamp, stamp))
+        return lock
+
+    def test_removes_locks_older_than_five_minutes(self, repo: Path) -> None:
+        lock = self._make_lock(repo, "index.lock", age_seconds=600)
+        removed = gitutil.clean_stale_locks(repo)
+        assert any("index.lock" in r for r in removed)
+        assert not lock.exists()
+
+    def test_keeps_fresh_locks(self, repo: Path) -> None:
+        lock = self._make_lock(repo, "index.lock", age_seconds=10)
+        removed = gitutil.clean_stale_locks(repo)
+        assert removed == []
+        assert lock.exists()
+
+    def test_age_threshold_is_configurable(self, repo: Path) -> None:
+        lock = self._make_lock(repo, "index.lock", age_seconds=30)
+        # With a 10s threshold a 30s-old lock is stale.
+        removed = gitutil.clean_stale_locks(repo, max_age_seconds=10)
+        assert any("index.lock" in r for r in removed)
+        assert not lock.exists()
+
+    def test_injectable_now(self, repo: Path) -> None:
+        lock = repo / ".git" / "HEAD.lock"
+        lock.write_text("", encoding="utf-8")
+        mtime = lock.stat().st_mtime
+        # 'now' is 10 minutes after the lock's mtime → stale.
+        removed = gitutil.clean_stale_locks(repo, now=mtime + 600)
+        assert any("HEAD.lock" in r for r in removed)
+
+    def test_noop_for_non_repo(self, tmp_path: Path) -> None:
+        assert gitutil.clean_stale_locks(tmp_path) == []
+
+
 class TestRun:
     def test_successful_command(self, repo: Path) -> None:
         result = gitutil.run(["rev-parse", "--is-inside-work-tree"], repo)

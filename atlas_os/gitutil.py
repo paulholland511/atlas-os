@@ -17,12 +17,17 @@ clean, structured result instead of a traceback.
 from __future__ import annotations
 
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 # Lock files git leaves in ``.git/`` (and ``.git/refs`` via the glob below) when
 # a process is interrupted mid-operation.
 _TOP_LEVEL_LOCKS = ("index.lock", "HEAD.lock", "config.lock", "packed-refs.lock")
+
+# A git lock older than this with no live owner is assumed abandoned by a crashed
+# process and safe to remove. Five minutes is far longer than any real git op.
+LOCK_STALE_AFTER_SECONDS = 300.0
 
 
 class GitError(RuntimeError):
@@ -95,6 +100,41 @@ def clear_stale_locks(repo: Path) -> list[str]:
 
     # Prune dangling worktree administrative files (ignored if it fails).
     run(["worktree", "prune"], repo, check=False)
+    return removed
+
+
+def clean_stale_locks(
+    repo: Path,
+    *,
+    max_age_seconds: float = LOCK_STALE_AFTER_SECONDS,
+    now: float | None = None,
+) -> list[str]:
+    """Remove only git locks older than ``max_age_seconds``; return what was removed.
+
+    The age-aware counterpart to :func:`clear_stale_locks`. A lock file is the
+    proxy for "a git process is mid-operation here": a *fresh* lock probably
+    belongs to a live process and must be left alone, while one whose mtime is
+    older than five minutes was almost certainly orphaned by a crash. This is the
+    safe variant the automated sync path and ``atlas doctor --fix`` use, so they
+    never yank a lock out from under a concurrently-running git command.
+
+    ``now`` (a unix timestamp) is injectable so the age test is deterministic
+    under test.
+    """
+    when = time.time() if now is None else now
+    removed: list[str] = []
+    for lock in find_stale_locks(repo):
+        try:
+            age = when - lock.stat().st_mtime
+        except OSError:
+            continue
+        if age < max_age_seconds:
+            continue  # too fresh — a live git process may own it.
+        try:
+            lock.unlink()
+            removed.append(str(lock.relative_to(repo)))
+        except OSError:
+            pass  # best-effort; the next git command will surface a clear error.
     return removed
 
 

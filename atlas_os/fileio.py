@@ -26,12 +26,19 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 # macOS marks cloud-offloaded files with the SF_DATALESS flag in st_flags.
 # Python's stat module doesn't expose the constant, so we hard-code its value.
 _SF_DATALESS = 0x40000000
+
+# How long :func:`ensure_materialized` waits, by default, for an iCloud-offloaded
+# file to fault back in before giving up.
+DEFAULT_MATERIALIZE_TIMEOUT = 30.0
 
 
 class FileIOError(OSError):
@@ -60,6 +67,61 @@ def is_dataless(path: Path) -> bool:
     except OSError:
         return False
     return bool(flags & _SF_DATALESS)
+
+
+def _trigger_fault_in(path: Path) -> None:
+    """Ask macOS to download an iCloud-offloaded file (best effort, non-blocking).
+
+    ``brctl download`` nudges the iCloud daemon to start materialising the file
+    without us having to ``read()`` it (which would block). If ``brctl`` is
+    absent (non-macOS, or a stripped environment) we silently rely on the
+    subsequent access to trigger the fault-in instead.
+    """
+    try:
+        subprocess.run(
+            ["brctl", "download", str(path)],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass  # best-effort — the poll below still governs success/failure.
+
+
+def ensure_materialized(
+    path: Path,
+    timeout: float = DEFAULT_MATERIALIZE_TIMEOUT,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    trigger: Callable[[Path], None] = _trigger_fault_in,
+    poll: float = 0.5,
+) -> bool:
+    """Block until ``path`` is locally present (faulted in), up to ``timeout``.
+
+    The vault lives in iCloud Drive, so a file may be **dataless** — listed in
+    the directory but with no local content. Reading it naively can stall or
+    return partial data. This triggers the download and polls
+    :func:`is_dataless` until the file materialises or the timeout elapses.
+
+    Returns ``True`` once the file is materialised (the common case on Linux/CI,
+    where nothing is ever dataless, is an immediate ``True``); returns ``False``
+    if it is still dataless after ``timeout`` so the caller can **skip and log**
+    rather than read garbage. Raises :class:`MissingFileError` if ``path`` does
+    not exist at all. ``clock``/``sleep``/``trigger`` are injectable for tests.
+    """
+    if not path.exists():
+        raise MissingFileError(f"File not found: {path}")
+    if not is_dataless(path):
+        return True
+
+    trigger(path)
+    deadline = clock() + timeout
+    while clock() < deadline:
+        if not is_dataless(path):
+            return True
+        sleep(poll)
+    return not is_dataless(path)
 
 
 def _describe_read_failure(path: Path, exc: OSError) -> FileIOError:

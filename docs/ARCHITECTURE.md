@@ -102,6 +102,23 @@ tools. See [`SCHEDULED-TASKS.md`](SCHEDULED-TASKS.md).
 Auto-commits the vault with categorised messages and produces changelogs for the
 morning briefing.
 
+### 6a. Git sync hardening (`atlas_os/git_sync.py`, `frontmatter.py`, `filelock.py`)
+The safety layer around every *automated* git operation, built on one guarantee:
+automation must never corrupt or lose hand-edited work. `git_sync.safe_sync`
+pulls remote changes with a **favour-local** merge (`git merge -X ours`) so a
+remote/automated change never overwrites a concurrent human edit; an unresolvable
+conflict **aborts** the merge (tree untouched) and alerts rather than
+force-resolving. `frontmatter.validate_before_commit` is the **pre-commit gate** —
+no automated commit proceeds with broken YAML, a missing required key, or a
+malformed date. `filelock` gives advisory, stale-self-healing per-file locks so
+the indexer and sync engine don't interleave writes; `gitutil.clean_stale_locks`
+removes crash-orphaned `.git/*.lock` files older than 5 minutes; and
+`fileio.ensure_materialized` waits (bounded) for iCloud-dataless files to fault in
+before reading. Surfaced via `atlas sync`, `atlas validate`, and a **Sync**
+category in `atlas doctor`. Every aborted write, conflict, and lock removal is
+logged to the audit trail. See
+[`docs/features/git-hardening.md`](features/git-hardening.md).
+
 ### 7. Email (`scripts/send_email.py`)
 A credential-free SMTP sender (password from env) used by the report tasks.
 

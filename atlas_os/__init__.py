@@ -4,4 +4,4 @@ This package provides the unified ``atlas`` command-line interface. See
 ``atlas_os.cli`` for the entry point.
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"

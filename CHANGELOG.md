@@ -6,7 +6,41 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-06-05
+
+The **[v3.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/3)**
+is an architecture-led release — Atlas OS refactored from a monolithic toolkit
+into a lean, extensible, MCP-native, hardened platform. Tracked by issues
+[#15](https://github.com/paulholland511/atlas-os/issues/15)–[#19](https://github.com/paulholland511/atlas-os/issues/19).
+
 ### Added
+- **Extension architecture** ([#15](https://github.com/paulholland511/atlas-os/issues/15)).
+  The lean core (vault parsing, git sync, RAG indexer, CLI, dashboard, audit
+  trail) is decoupled from the domain verticals. `trading/`, `voice_automation/`,
+  and `job_search/` move into `extensions/` as opt-in extras
+  (`pip install 'atlas-os[trading]'`), discovered via setuptools entry points
+  with a documented `register_commands()` / `register_skills()` /
+  `register_schedules()` API. `pip install atlas-os` installs core only.
+- **MCP skills** ([#16](https://github.com/paulholland511/atlas-os/issues/16)).
+  The skill framework speaks the **Model Context Protocol**: the `atlas_os`
+  runtime is an MCP client, each skill an MCP server with schema-validated tool
+  definitions (stdio for local skills, SSE/HTTP for remote). Existing `SKILL.md`
+  skills are auto-wrapped in an MCP shim, so skills are consumable from Claude
+  Code, Cowork, and any third-party MCP host.
+- **Security hardening** ([#17](https://github.com/paulholland511/atlas-os/issues/17)).
+  Code validation and sandboxing for community skills: AST static analysis at
+  `atlas skills install` with BLOCK / WARN / INFO severities (BLOCK is not
+  `--force`-overridable), a restricted runtime sandbox (timeout, memory limit,
+  no network by default), and audit-trail logging of every install and run,
+  surfaced via `atlas security report`.
+- **Git sync hardening** ([#18](https://github.com/paulholland511/atlas-os/issues/18)).
+  Conflict resolution and data integrity so automated git never corrupts the
+  vault: `git_sync.safe_sync` uses a favour-local merge that never overwrites a
+  concurrent human edit and aborts true conflicts (tree untouched) rather than
+  force-resolving; `frontmatter.validate_before_commit` gates commits on valid
+  YAML and required keys; `filelock` adds advisory, stale-self-healing per-file
+  locks; and crash-orphaned `.git/*.lock` files are cleared. Surfaced via
+  `atlas sync`, `atlas validate`, and a Sync category in `atlas doctor`.
 - **Scalable vector storage — pluggable backends** ([#19](https://github.com/paulholland511/atlas-os/issues/19)).
   A small `VectorBackend` interface (`insert` / `search` / `delete_by_file` /
   `count` / `files` / `clear` / `export_chunks`) now sits in front of the RAG
@@ -24,48 +58,6 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   against a stale `lastrowid` (SQLite refreshes it only on INSERT, not the
   `ON CONFLICT DO UPDATE` path), which could overwrite an unrelated row's vector
   and surface the wrong chunk in KNN results. The rowid is now resolved by id.
-
-## [3.0.0] — Planned
-
-The **[v3.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/3)**
-is an architecture-led release. It refactors Atlas OS from a monolithic toolkit
-into a lean, extensible, MCP-native, hardened platform. Tracked by issues
-[#15](https://github.com/paulholland511/atlas-os/issues/15)–[#19](https://github.com/paulholland511/atlas-os/issues/19).
-
-### Planned
-- **Extension architecture** ([#15](https://github.com/paulholland511/atlas-os/issues/15)).
-  Decouple the lean core (vault parsing, git sync, RAG indexer, CLI, dashboard,
-  audit trail) from the domain verticals. `trading/`, `voice_automation/`, and
-  `job_search/` move into `extensions/` and become opt-in extras
-  (`pip install 'atlas-os[trading]'`), discovered via setuptools entry points
-  with a documented `register_commands()` / `register_skills()` /
-  `register_schedules()` API. `pip install atlas-os` installs core only.
-  Ships with a migration guide and deprecation shims.
-- **MCP skills** ([#16](https://github.com/paulholland511/atlas-os/issues/16)).
-  Migrate the skill framework to the **Model Context Protocol**: the `atlas_os`
-  runtime becomes an MCP client, each skill an MCP server with schema-validated
-  tool definitions, stdio transport for local skills and SSE/HTTP for remote.
-  Existing `SKILL.md` skills are auto-wrapped in an MCP shim; skills become
-  consumable from Claude Code, Cowork, and third-party MCP clients, and the
-  marketplace distributes MCP server bundles.
-- **Security hardening** ([#17](https://github.com/paulholland511/atlas-os/issues/17)).
-  Code validation and sandboxing for community skills: AST static analysis at
-  `atlas skills install` with BLOCK / WARN / INFO severities, a restricted
-  runtime sandbox (timeout, memory limit, no network by default), optional
-  GPG/cosign signature verification for trusted publishers, audit-trail logging
-  of every install and run, and a documented community review process.
-- **Git sync hardening** ([#18](https://github.com/paulholland511/atlas-os/issues/18)).
-  Conflict resolution and data integrity so automated git operations never
-  corrupt the vault: favour-local merge strategy, frontmatter YAML validation
-  before every automated commit, file locking with retry/backoff, iCloud
-  dataless-file fault-in, stale `.git/index.lock` cleanup, and bus-error / mount
-  fallback — all logged to the audit trail and surfaced by `atlas doctor`.
-- **Scalable vector storage** ([#19](https://github.com/paulholland511/atlas-os/issues/19)).
-  A pluggable `VectorBackend` interface (`insert`/`search`/`delete`/`count`/
-  `files`) with `sqlite-vec` as the zero-config default, plus **LanceDB**
-  (zero-copy disk queries, metadata filtering, lower RAM) and ChromaDB backends
-  selectable via `VECTOR_BACKEND`. Adds an `atlas migrate-vectors` tool and
-  documented benchmarks at 1K / 10K / 100K chunks.
 
 ## [2.0.0] — 2026-06-04
 

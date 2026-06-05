@@ -1110,37 +1110,38 @@ for what's next):
   per-type filters, and a click-through panel of each note's links and backlinks.
   *Shipped.*
 
-### 🚧 v3.0.0 — next: the architecture refactor
+### ✅ v3.0.0 — the architecture refactor (shipped)
 
 The **[v3.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/3)**
-is an architecture-led release — a lean core, MCP-native skills, a security gate
-for community code, bullet-proof git sync, and a scalable, pluggable vector
-store. Contributions welcome:
+is **complete** — a lean core, MCP-native skills, a security gate for community
+code, bullet-proof git sync, and a scalable, pluggable vector store all shipped:
 
-- 🔜 **Extension architecture** ([#15](https://github.com/paulholland511/atlas-os/issues/15)) —
-  decouple the lean core (vault, git sync, RAG, CLI, dashboard, audit trail)
+- ✅ **Extension architecture** ([#15](https://github.com/paulholland511/atlas-os/issues/15)) —
+  decoupled the lean core (vault, git sync, RAG, CLI, dashboard, audit trail)
   from the domain verticals. Trading/voice/jobs move to `extensions/`, installed
   via extras (`pip install 'atlas-os[trading]'`) and discovered through
   setuptools entry points with a clean `register_commands()` /
-  `register_skills()` / `register_schedules()` API.
-- 🔜 **MCP skills** ([#16](https://github.com/paulholland511/atlas-os/issues/16)) —
-  make the skill framework speak the **Model Context Protocol**: the runtime
-  becomes an MCP client, each skill an MCP server (stdio for local, SSE/HTTP for
-  remote), existing `SKILL.md` skills auto-wrapped in a shim, and skills usable
-  from Claude Code, Cowork, and any MCP host.
-- 🔜 **Security hardening** ([#17](https://github.com/paulholland511/atlas-os/issues/17)) —
+  `register_skills()` / `register_schedules()` API. *Shipped.*
+- ✅ **MCP skills** ([#16](https://github.com/paulholland511/atlas-os/issues/16)) —
+  the skill framework speaks the **Model Context Protocol**: the runtime is an
+  MCP client, each skill an MCP server (stdio for local, SSE/HTTP for remote),
+  existing `SKILL.md` skills auto-wrapped in a shim, and skills usable from
+  Claude Code, Cowork, and any MCP host. *Shipped.*
+- ✅ **Security hardening** ([#17](https://github.com/paulholland511/atlas-os/issues/17)) —
   AST static analysis at `atlas skills install` (BLOCK / WARN / INFO), a
   restricted runtime sandbox (timeout, memory limit, no network by default),
-  optional GPG/cosign signing, and full audit-trail logging for community skills.
-- 🔜 **Git sync hardening** ([#18](https://github.com/paulholland511/atlas-os/issues/18)) —
-  favour-local merges, frontmatter validation before every automated commit,
-  file locking with backoff, iCloud dataless-file fault-in, stale `index.lock`
-  cleanup, and bus-error resilience, so automated git never corrupts your vault.
-- 🔜 **Scalable vector storage** ([#19](https://github.com/paulholland511/atlas-os/issues/19)) —
+  and full audit-trail logging for community skills via `atlas security report`.
+  *Shipped.*
+- ✅ **Git sync hardening** ([#18](https://github.com/paulholland511/atlas-os/issues/18)) —
+  favour-local merges that abort true conflicts untouched, frontmatter
+  validation before every automated commit, advisory file locking, and stale
+  `.git/*.lock` cleanup, so automated git never corrupts your vault. Surfaced via
+  `atlas sync`, `atlas validate`, and `atlas doctor`. *Shipped.*
+- ✅ **Scalable vector storage** ([#19](https://github.com/paulholland511/atlas-os/issues/19)) —
   a pluggable `VectorBackend` interface with `sqlite-vec` as the zero-config
   default plus **LanceDB** (zero-copy disk queries, metadata filtering) and
   ChromaDB options, selectable via `VECTOR_BACKEND`, with an
-  `atlas migrate-vectors` tool and documented benchmarks at 1K/10K/100K chunks.
+  `atlas migrate-vectors` tool. *Shipped.*
 
 Further out:
 

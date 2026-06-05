@@ -99,9 +99,12 @@ morning briefing.
 ### 7. Email (`scripts/send_email.py`)
 A credential-free SMTP sender (password from env) used by the report tasks.
 
-### 8. Trading SDK (`trading/`, optional)
+### 8. Trading briefings (extension, optional)
 A multi-agent market-research framework that writes briefings into the vault.
-Entirely optional and **not financial advice**.
+Entirely optional and **not financial advice**. As of v3.0 this is an
+**extension** (`atlas_os/extensions/trading/`), not core — see *Extension
+architecture* below — so `atlas trading` is contributed by the bundled trading
+extension rather than the core CLI.
 
 ### 9. Web dashboard (`atlas_os/dashboard/`)
 A lightweight, local-first **Flask web UI** (`atlas dashboard`) over everything
@@ -135,6 +138,43 @@ triggered, the outcome, duration, and what changed), written under an OS-level
 file lock and auto-rotating at 10 MB. Queryable and exportable via `atlas audit
 show / tail / export`.
 
+### 12. Extension architecture (`atlas_os/extensions/`)
+The line between the **lean core** (vault parsing, git sync, RAG, CLI, dashboard,
+audit trail) and **domain modules** (trading, voice/TTS, the job tracker). The
+core never imports a domain module directly; instead it discovers and loads them
+at startup through one small contract, so the core stays decoupled and a domain
+module can be added, removed, or shipped by a third party without touching it.
+
+- **The contract** — [`extensions/base.py`](../atlas_os/extensions/base.py)
+  defines `AtlasExtension`, an `ABC` whose only required surface is `name` and
+  `description`. Four optional hooks let an extension plug in: `register_commands`
+  (add subcommands to the `atlas` Typer app), `register_skills`,
+  `register_schedules`, and the `on_load` / `on_unload` lifecycle. Every hook but
+  the two identity properties has a no-op default.
+- **Discovery + loading** — [`extensions/__init__.py`](../atlas_os/extensions/__init__.py)
+  merges two channels: Python **entry points** under the `atlas_os.extensions`
+  group (how third-party and installed extensions are found, declared in
+  `pyproject.toml`) and a **built-in** registry of the vendored modules (so a
+  bare source checkout discovers them without entry-point metadata). An entry
+  point overrides a built-in of the same name, so a user can shadow a bundled
+  extension. Loading is **fault-tolerant**: an extension whose import fails (a
+  missing optional dependency, a broken third-party package) is skipped and its
+  error recorded, never crashing the core CLI. `atlas extensions list` shows what
+  was discovered and what failed; `atlas extensions info <name>` shows one
+  extension's metadata, skills, and schedules.
+- **The bundled extensions** — `trading` (market-research briefings, needs the
+  `[trading]` extra), `voice` (TTS, stub), and `jobs` (application tracker, stub).
+  Each declares its dependencies as an opt-in extra
+  (`pip install 'atlas-os[trading]'`), so the core install stays slim and you
+  only pull in what you use.
+
+The CLI wires this up at the end of [`cli.py`](../atlas_os/cli.py): after every
+core command is defined, `load_all_extensions(app)` registers each extension's
+commands onto the app, so extension subcommands are present whenever `atlas` runs.
+
+See [`features/extensions.md`](features/extensions.md) for the full guide,
+including how to write your own.
+
 ## Design principles
 
 - **Local-first.** Notes and embeddings never leave the machine by default.
@@ -142,6 +182,9 @@ show / tail / export`.
 - **Files over databases.** Everything is inspectable, diffable, and portable.
 - **Idempotent automations.** Re-running a task converges rather than duplicates.
 - **Non-destructive.** Scripts add/append; the hot cache is append-only.
+- **Lean core, optional extensions.** Domain modules plug into the core through a
+  contract; the core never depends on them, and they pull their own deps in as
+  opt-in extras.
 
 ## Deployment
 

@@ -14,11 +14,17 @@ Subcommands:
 * ``atlas changelog``— vault changelog        (wraps scripts/vault_changelog.py)
 * ``atlas health``   — full health probe      (wraps scripts/health_check.py)
 * ``atlas email``    — send an email          (wraps scripts/send_email.py)
-* ``atlas trading``  — trading research brief  (wraps scripts/trading_briefing.py)
 * ``atlas schemas``  — enforce frontmatter     (wraps schemas/enforce_schemas.py)
 * ``atlas session``  — save Cowork transcripts (wraps scripts/save_sessions.py)
 * ``atlas audit``    — inspect the append-only audit trail (show | tail | export)
 * ``atlas dashboard``— launch the local web dashboard (needs the dashboard extra)
+* ``atlas extensions``— list/inspect optional extensions (trading, voice, jobs)
+
+Domain-specific functionality (trading briefings, voice/TTS, the job tracker)
+lives in **extensions** (``atlas_os.extensions``), discovered and loaded onto
+this app at startup so the core stays decoupled from every domain module. See
+``atlas extensions list``. The ``atlas trading`` command, for instance, is now
+provided by the bundled trading extension rather than the core.
 
 Every script-wrapping command appends an entry to the audit trail (see
 ``atlas_os.audit``) recording what ran, how it was triggered, the outcome,
@@ -366,18 +372,6 @@ def health(ctx: typer.Context) -> None:
     """Full subsystem health probe (--json | --quiet)."""
     _run_audited("health", scripts_dir() / "health_check.py", ctx.args,
                  _context_for("health", ctx.args))
-
-
-@app.command(context_settings=_PASSTHROUGH)
-def trading(ctx: typer.Context) -> None:
-    """Generate a trading research briefing (--ticker | --date | --dry-run).
-
-    Optional component — needs the third-party TradingAgents package and a
-    running local LLM endpoint. Reads VAULT_PATH and LM_STUDIO_* from the env.
-    """
-    _require_env("VAULT_PATH")
-    _run_audited("trading", scripts_dir() / "trading_briefing.py", ctx.args,
-                 _context_for("trading", ctx.args))
 
 
 @app.command()
@@ -1795,6 +1789,103 @@ def dashboard(
     Needs the optional dashboard extra: ``pip install 'atlas-os[dashboard]'``.
     """
     _serve_dashboard(host, port, open_browser=open_browser, debug=debug)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# extensions — optional, domain-specific modules that plug into the core
+# ─────────────────────────────────────────────────────────────────────────────
+extensions_app = typer.Typer(
+    no_args_is_help=True,
+    help="List and inspect the optional extensions plugged into Atlas OS.",
+)
+app.add_typer(extensions_app, name="extensions")
+
+
+@extensions_app.command("list")
+def extensions_list() -> None:
+    """List every discovered extension and whether it loaded cleanly.
+
+    Extensions are domain-specific modules (trading, voice, jobs) discovered via
+    the ``atlas_os.extensions`` entry-point group and the bundled built-ins. Each
+    is loaded onto this CLI at startup; anything that failed to load is shown with
+    its error.
+    """
+    from atlas_os import extensions as ext
+
+    discovered = ext.list_extensions()
+    if not discovered:
+        _echo_warn("no extensions found")
+        raise typer.Exit()
+
+    errors = ext.discovery_errors()
+    loaded = {e.name for e in ext.loaded_extensions()}
+
+    typer.secho(f"\nExtensions ({len(discovered)} discovered):\n", bold=True)
+    for found in discovered:
+        instance = ext.get_extension(found.name) if found.name in loaded else None
+        if instance is not None:
+            typer.secho(f"  {found.name}", fg=typer.colors.CYAN, nl=False)
+            typer.echo(f"  v{instance.version}  ·  [{found.source}]")
+            typer.echo(f"    {instance.description}")
+        elif found.name in errors:
+            typer.secho(f"  {found.name}", fg=typer.colors.RED, nl=False)
+            typer.echo(f"  [{found.source}] — failed to load")
+            typer.secho(f"    {errors[found.name]}", fg=typer.colors.RED)
+        else:
+            typer.secho(f"  {found.name}", fg=typer.colors.CYAN, nl=False)
+            typer.echo(f"  [{found.source}] — not loaded")
+    typer.echo("\nRun `atlas extensions info <name>` for details.")
+
+
+@extensions_app.command("info")
+def extensions_info(
+    name: str = typer.Argument(..., help="Extension name to inspect."),
+) -> None:
+    """Show an extension's metadata, commands, skills, and schedules."""
+    from atlas_os import extensions as ext
+
+    try:
+        instance = ext.load_extension(name)
+    except ext.ExtensionNotFoundError:
+        _echo_fail(f"unknown extension {name!r} — run `atlas extensions list`")
+        raise typer.Exit(code=2) from None
+    except ext.ExtensionLoadError as exc:
+        _echo_fail(f"extension {name!r} failed to load: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    typer.secho(f"\n{instance.name}  v{instance.version}", fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"  {instance.description}\n")
+
+    skills = instance.register_skills()
+    typer.secho(f"  Skills ({len(skills)}):", bold=True)
+    for skill in skills:
+        typer.echo(f"    • {skill.get('name', '?')} — {skill.get('description', '')}")
+    if not skills:
+        typer.echo("    (none)")
+
+    schedules = instance.register_schedules()
+    typer.secho(f"\n  Schedules ({len(schedules)}):", bold=True)
+    for schedule in schedules:
+        typer.echo(f"    • {schedule.get('name', '?')} — {schedule.get('cron', '')}")
+    if not schedules:
+        typer.echo("    (none)")
+    typer.echo("")
+
+
+def _load_extensions() -> None:
+    """Discover and load every extension, registering its commands onto ``app``.
+
+    Called once at import time, after all core commands are defined, so extension
+    subcommands are present whenever the CLI runs. Fault-tolerant: a broken
+    extension is skipped (its error surfaces in ``atlas extensions list``) rather
+    than stopping the core CLI from starting.
+    """
+    from atlas_os import extensions as ext
+
+    ext.load_all_extensions(app)
+
+
+_load_extensions()
 
 
 if __name__ == "__main__":

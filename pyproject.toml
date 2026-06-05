@@ -34,7 +34,15 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = ["pdfplumber>=0.10"]
+# ── Extension extras ───────────────────────────────────────────────────────
+# Domain-specific extensions (atlas_os/extensions/) ship with the package and are
+# discovered via the [project.entry-points] below, but their heavier third-party
+# dependencies are opt-in. Install one with e.g. `pip install 'atlas-os[trading]'`.
 trading = ["yfinance>=0.2"]
+# voice (TTS) and jobs (tracker) are currently dependency-free stubs; the extras
+# exist so users can opt in now and pick up real deps as the modules are built.
+voice = []
+jobs = []
 # Production-scale RAG: the sqlite-vec extension accelerates vector search.
 # Without it the store transparently falls back to a (NumPy-accelerated)
 # brute-force cosine scan, so this extra is optional. NumPy further speeds the
@@ -53,6 +61,17 @@ Changelog = "https://github.com/paulholland511/atlas-os/blob/main/CHANGELOG.md"
 
 [project.scripts]
 atlas = "atlas_os.cli:app"
+
+# Extension discovery. The CLI scans this entry-point group at startup and loads
+# every registered AtlasExtension subclass onto the `atlas` app, so the core
+# never imports a domain module directly. Third-party packages add their own
+# extensions by registering under the same group. These bundled three are also
+# listed in atlas_os/extensions/__init__.py (BUILTIN_EXTENSIONS) so a source
+# checkout discovers them without installed entry-point metadata.
+[project.entry-points."atlas_os.extensions"]
+trading = "atlas_os.extensions.trading:TradingExtension"
+voice = "atlas_os.extensions.voice:VoiceExtension"
+jobs = "atlas_os.extensions.jobs:JobsExtension"
 
 # Single-source the version from atlas_os/__init__.py (__version__). Bump it
 # there and both the package and the package metadata stay in lockstep.

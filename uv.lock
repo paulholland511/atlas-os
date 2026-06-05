@@ -68,7 +68,7 @@ requires-dist = [
     { name = "yfinance", marker = "extra == 'all'", specifier = ">=0.2" },
     { name = "yfinance", marker = "extra == 'trading'", specifier = ">=0.2" },
 ]
-provides-extras = ["all", "dashboard", "pdf", "trading", "vector"]
+provides-extras = ["all", "dashboard", "jobs", "pdf", "trading", "vector", "voice"]
 
 [[package]]
 name = "beautifulsoup4"

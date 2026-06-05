@@ -31,6 +31,7 @@ environment variables described here are the public interface of Atlas OS. See
   - [`atlas audit`](#atlas-audit)
   - [`atlas schemas`](#atlas-schemas)
   - [`atlas session`](#atlas-session)
+  - [`atlas extensions`](#atlas-extensions)
 - [Environment variables reference](#environment-variables-reference)
 - [Exit codes reference](#exit-codes-reference)
 - [Stability promise](#stability-promise)
@@ -99,13 +100,14 @@ atlas-os 0.3.0
 | [`atlas changelog`](#atlas-changelog) | Summarise vault changes over a time window. |
 | [`atlas graph`](#atlas-graph) | Rebuild the wikilink knowledge graph. |
 | [`atlas email`](#atlas-email) | Send an email via SMTP. |
-| [`atlas trading`](#atlas-trading) | Generate a trading research briefing *(optional)*. |
+| [`atlas trading`](#atlas-trading) | Generate a trading research briefing *(bundled extension)*. |
 | [`atlas skills`](#atlas-skills) | List, show, and install the agent skills, individually or as packs. |
 | [`atlas backends`](#atlas-backends) | Show detected LLM backends; `test` runs an inference. |
 | [`atlas audit`](#atlas-audit) | Inspect the append-only audit trail. |
 | [`atlas dashboard`](#atlas-dashboard) | Launch the local web dashboard *(needs the `dashboard` extra)*. |
 | [`atlas schemas`](#atlas-schemas) | Enforce per-folder frontmatter schemas. |
 | [`atlas session`](#atlas-session) | Save Cowork chat transcripts to the vault. |
+| [`atlas extensions`](#atlas-extensions) | List and inspect the optional extensions plugged into Atlas OS. |
 
 **CLI-native vs. script-wrapping.** `init`, `doctor`, `skills`, `backends`, and
 `audit` are implemented in the CLI itself. The rest forward their flags 1:1 to a
@@ -549,8 +551,12 @@ atlas email --json '{"to":"me@example.com","subject":"Hi","body_html":"<p>Hi</p>
 
 Generate a trading research briefing. Wraps `scripts/trading_briefing.py`.
 
-> **Optional component.** Needs the third-party `TradingAgents` package and a
-> running local LLM endpoint. Reads `VAULT_PATH` and `LM_STUDIO_*` from the env.
+> **Bundled extension.** As of v3.0 this command is provided by the bundled
+> `trading` extension (`atlas_os/extensions/trading/`), not the core — see
+> [`atlas extensions`](#atlas-extensions). Needs the third-party `TradingAgents`
+> package and a running local LLM endpoint; install the extra with
+> `pip install 'atlas-os[trading]'`. Reads `VAULT_PATH` and `LM_STUDIO_*` from
+> the env.
 
 **Usage**
 
@@ -902,6 +908,42 @@ atlas session save                 # new/changed since last run
 atlas session save --since 12h     # half-day window (twice-daily capture, the default)
 atlas session save --since 24h     # the day's sessions (single nightly capture)
 atlas session save --all --json
+```
+
+---
+
+### `atlas extensions`
+
+List and inspect the optional, domain-specific **extensions** plugged into
+Atlas OS. Extensions (trading, voice, jobs, plus any third-party ones) are
+discovered via the `atlas_os.extensions` entry-point group and the bundled
+built-ins, then loaded onto the CLI at startup so their subcommands are always
+present. See [`docs/features/extensions.md`](features/extensions.md) for the full
+guide, including how to write your own.
+
+**Usage**
+
+```text
+atlas extensions list
+atlas extensions info <name>
+```
+
+**Subcommands**
+
+| Subcommand | Description |
+|---|---|
+| `list` | Show every discovered extension, its source (`built-in` / `entry-point`), and — for anything that failed to load — the recorded error. |
+| `info <name>` | Load the named extension and show its version, description, contributed skills, and schedules. |
+
+**Exit codes** — `0` success; `1` the named extension failed to load (e.g. a
+missing dependency); `2` unknown extension name.
+
+**Examples**
+
+```bash
+atlas extensions list
+atlas extensions info trading
+atlas extensions info voice
 ```
 
 ---

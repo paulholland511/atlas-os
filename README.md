@@ -5,12 +5,17 @@
     / ___ \ |_| | (_| \__ \ | |_| |___) |
    /_/   \_\__|_|\__,_|___/  \___/|____/
 
-   A personal AI operating system, built on Claude Cowork.
-   Every conversation stored · every research session preserved.
-   Job search automation · trading intelligence · RAG knowledge · 17+ pipelines.
+   Turn your Obsidian vault into a searchable AI knowledge base.
+   Local LLMs · hybrid RAG search · web dashboard · 160+ skills.
+   A personal AI operating system that remembers everything · works while you sleep.
 ```
 
 # Atlas OS
+
+> **Turn your Obsidian vault into a searchable AI knowledge base** — with local
+> LLMs, hybrid RAG search, a web dashboard, and 160+ skills. Atlas OS is a
+> personal AI operating system that remembers everything and works while you
+> sleep.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paulholland511/atlas-os/ci.yml?branch=main&label=CI)](https://github.com/paulholland511/atlas-os/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -27,17 +32,19 @@
 
 Everything below is **in the box today** — not roadmap, not "coming soon":
 
+- 🔍 **Hybrid RAG search** — BM25 keyword + vector semantic search over your whole vault, fused into one ranked result set
+- 📓 **Obsidian vault integration** — point Atlas at your markdown vault and it becomes a searchable, AI-aware second brain
+- 💾 **Session capture** — every Cowork conversation saved to your vault twice daily
+- 🔌 **Local LLM backends** — auto-detects Ollama, LM Studio, llama.cpp, or any OpenAI-compatible endpoint; nothing leaves your machine
+- 📊 **Web dashboard** (`atlas dashboard`) — seven live panels: health, audit, tasks, skills, knowledge graph, vectors, RAG search
+- 🕸️ **Visual knowledge graph** — interactive D3 view of how your notes connect (`atlas graph --open`)
 - 🧙 **Interactive setup wizard** (`atlas init`) — zero to running in 5 minutes
-- 🔌 **Pluggable LLM backends** — auto-detects LM Studio, Ollama, llama.cpp, or any OpenAI-compatible endpoint
 - 📋 **Audit trail** — append-only JSONL logging every autonomous action (ISO 27001 aligned)
 - 🐳 **Docker support** — `Dockerfile` + `docker-compose.yml` included
 - 🩺 **Smart diagnostics** — `atlas doctor --fix` detects and repairs issues automatically
 - ✅ **400+ automated tests** with CI/CD on every push
-- 💾 **Session capture** — every Cowork conversation saved to your vault twice daily
 - 📚 **160+ skills catalogue** with one-command `atlas skills install-pack`
-- 📊 **Web dashboard** (`atlas dashboard`) — seven live panels: health, audit, tasks, skills, knowledge graph, vectors, RAG search
 - 🛒 **Skills marketplace** — search, publish, and install community skills (`atlas skills search` / `publish` / `registry`)
-- 🕸️ **Visual knowledge graph** — interactive D3 view of how your notes connect (`atlas graph --open`)
 
 ---
 

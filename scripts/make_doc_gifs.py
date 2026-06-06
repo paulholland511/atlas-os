@@ -1,340 +1,254 @@
 #!/usr/bin/env python3
 """Render the per-topic animated terminal GIFs for the Eidetic OS README and docs.
 
-Produces four focused screencasts that supplement the headline ``demo.gif``:
+Six focused screencasts that supplement the headline ``demo.gif``:
 
-    install.gif    `pip install eidetic-os` + version check (animated download bar)
-    setup.gif      `eidetic init` interactive wizard, with typed answers
-    search.gif     `eidetic search` hybrid RAG results
-    dashboard.gif  `eidetic dashboard` launch + health summary
+    install.gif      pip install → eidetic init → eidetic doctor (all green)
+    setup.gif        the interactive `eidetic init` wizard, with typed answers
+    search.gif       hybrid RAG search — BM25 + vector + RRF fusion, scored hits
+    dashboard.gif    `eidetic dashboard` launch + panel list
+    skills.gif       `eidetic skills` catalog, a sandboxed run, and `mcp serve`
+    extensions.gif   install an extra, discover extensions, run `eidetic trading`
 
-Shares the look of ``scripts/make_demo_gif.py`` (macOS terminal chrome, Menlo,
-typewriter prompts, supersampled text). Pure synthetic output, Pillow only.
+Shares the look of the hero demo via ``scripts/_gif_lib.py`` (macOS terminal
+chrome, Menlo, typewriter prompts, supersampled text). Pure synthetic output —
+no personal data — Pillow only.
 
-    python3 scripts/make_doc_gifs.py            # writes the four GIFs in repo root
+    python3 scripts/make_doc_gifs.py            # writes the six GIFs in repo root
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
-
-# ── canvas / theme ────────────────────────────────────────────────────────────
-WIDTH, HEIGHT = 820, 460
-TITLEBAR_H = 30
-PAD_X, PAD_Y = 16, 12
-LINE_H = 18
-FONT_SIZE = 13
-SCALE = 2  # supersample for crisp text, then downscale
-
-BG = (30, 31, 34)
-TITLEBAR = (44, 46, 51)
-TITLEBAR_TXT = (170, 173, 180)
-FG = (208, 211, 215)
-PROMPT_SYMB = (98, 209, 150)
-CURSOR = (208, 211, 215)
-
-GREEN = (87, 200, 122)
-YELLOW = (224, 190, 92)
-RED = (224, 108, 108)
-CYAN = (86, 182, 194)
-BLUE = (102, 170, 255)
-DIM = (128, 132, 140)
-BOLD_W = (236, 238, 240)
-MAGENTA = (197, 134, 192)
-
-TRAFFIC = [(255, 95, 86), (255, 189, 46), (39, 201, 63)]
-
-
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    for path in (
-        "/System/Library/Fonts/Menlo.ttc",
-        "/System/Library/Fonts/Monaco.ttf",
-        "/System/Library/Fonts/Supplemental/Courier New.ttf",
-    ):
-        if Path(path).exists():
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
-
-
-FONT = _load_font(FONT_SIZE * SCALE)
-FONT_BOLD = _load_font(FONT_SIZE * SCALE)
-TITLE_FONT = _load_font(13 * SCALE)
-CHAR_W = FONT.getbbox("M")[2]
-
-VISIBLE_LINES = (HEIGHT - TITLEBAR_H - 2 * PAD_Y) // LINE_H
-
-
-# ── line model ────────────────────────────────────────────────────────────────
-@dataclass
-class Span:
-    text: str
-    color: tuple[int, int, int] = FG
-    bold: bool = False
-
-
-@dataclass
-class Line:
-    spans: list[Span] = field(default_factory=list)
-
-
-def L(*spans: Span) -> Line:
-    return Line(list(spans))
-
-
-def S(text: str, color: tuple[int, int, int] = FG, bold: bool = False) -> Span:
-    return Span(text, color, bold)
-
-
-def prompt_line(cmd: str) -> Line:
-    return L(S("$ ", PROMPT_SYMB, bold=True), S(cmd, BOLD_W))
-
-
-# ── frame rendering ───────────────────────────────────────────────────────────
-def _draw_titlebar(d: ImageDraw.ImageDraw, title: str) -> None:
-    d.rectangle([0, 0, WIDTH * SCALE, TITLEBAR_H * SCALE], fill=TITLEBAR)
-    cy = (TITLEBAR_H // 2) * SCALE
-    for i, col in enumerate(TRAFFIC):
-        cx = (18 + i * 20) * SCALE
-        r = 6 * SCALE
-        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col)
-    tw = d.textlength(title, font=TITLE_FONT)
-    d.text(
-        ((WIDTH * SCALE - tw) / 2, (TITLEBAR_H * SCALE - TITLE_FONT.size) / 2 - SCALE),
-        title,
-        font=TITLE_FONT,
-        fill=TITLEBAR_TXT,
-    )
-
-
-def render_frame(
-    lines: list[Line], typed: int | None, show_cursor: bool, title: str
-) -> Image.Image:
-    """Draw the visible buffer. ``typed`` truncates the last line's last span to
-    that many characters (typewriter); ``show_cursor`` draws a block cursor."""
-    img = Image.new("RGB", (WIDTH * SCALE, HEIGHT * SCALE), BG)
-    d = ImageDraw.Draw(img)
-    _draw_titlebar(d, title)
-
-    view = lines[-VISIBLE_LINES:]
-    y = (TITLEBAR_H + PAD_Y) * SCALE
-    for li, line in enumerate(view):
-        x = PAD_X * SCALE
-        is_last = li == len(view) - 1
-        for si, span in enumerate(line.spans):
-            text = span.text
-            if is_last and typed is not None and si == len(line.spans) - 1:
-                text = text[:typed]
-            font = FONT_BOLD if span.bold else FONT
-            d.text((x, y), text, font=font, fill=span.color)
-            x += len(text) * CHAR_W
-        if is_last and show_cursor:
-            d.rectangle(
-                [x, y + 2 * SCALE, x + CHAR_W - SCALE, y + LINE_H * SCALE - 2 * SCALE],
-                fill=CURSOR,
-            )
-        y += LINE_H * SCALE
-
-    return img.resize((WIDTH, HEIGHT), Image.LANCZOS)
-
-
-# ── timeline builder ──────────────────────────────────────────────────────────
-TYPE_MS = 55
-CHARS_PER_TICK = 2
-CURSOR_BLINK_MS = 380
-REVEAL_MS = 55
-BLANK_MS = 26
-
-
-class Builder:
-    """Accumulates frames for one GIF. A line whose LAST span holds text can be
-    typewritten; everything else is revealed whole."""
-
-    def __init__(self, title: str) -> None:
-        self.title = title
-        self.buffer: list[Line] = []
-        self.frames: list[Image.Image] = []
-        self.durations: list[int] = []
-
-    def _frame(self, typed: int | None, cursor: bool, ms: int) -> None:
-        self.frames.append(render_frame(self.buffer, typed, cursor, self.title))
-        self.durations.append(ms)
-
-    def append(self, line: Line) -> None:
-        self.buffer.append(line)
-
-    def typewrite(self, blink_before: bool = True, ms: int = TYPE_MS) -> None:
-        full = self.buffer[-1].spans[-1].text
-        if blink_before:
-            self._frame(0, True, CURSOR_BLINK_MS)
-            self._frame(0, False, 200)
-        for i in range(CHARS_PER_TICK, len(full) + CHARS_PER_TICK, CHARS_PER_TICK):
-            self._frame(min(i, len(full)), True, ms)
-        self._frame(len(full), True, 300)
-
-    def cmd(self, command: str) -> None:
-        self.append(prompt_line(command))
-        self.typewrite(blink_before=True)
-
-    def reveal(self, line: Line) -> None:
-        self.append(line)
-        self._frame(None, False, BLANK_MS if not line.spans else REVEAL_MS)
-
-    def hold(self, ms: int, cursor: bool = False) -> None:
-        self._frame(None, cursor, ms)
-
-    def progress_download(self, label: str, kb: float, steps: int = 22) -> None:
-        """Animate a pip-style download bar filling to 100%."""
-        self.reveal(L(S("  " + label, DIM)))
-        self.append(L(S("", DIM)))  # placeholder for the bar line
-        bar_w = 34
-        for s in range(steps + 1):
-            frac = s / steps
-            filled = round(bar_w * frac)
-            bar = "━" * filled + "╺" + "━" * max(0, bar_w - filled - 1)
-            done = kb * frac
-            color = GREEN if frac >= 1.0 else CYAN
-            self.buffer[-1] = L(
-                S("  ", FG),
-                S(bar[:filled], color),
-                S(bar[filled:], DIM),
-                S(f"  {done:4.1f}/{kb:.1f} kB", DIM),
-            )
-            self._frame(None, False, 34)
-
-    def end_prompt(self, ms: int = 1500) -> None:
-        self.append(L(S("$ ", PROMPT_SYMB, bold=True), S("", BOLD_W)))
-        self._frame(0, True, ms)
-        self._frame(0, False, 240)
-
-    def save(self, out: Path) -> None:
-        self.frames[0].save(
-            out,
-            save_all=True,
-            append_images=self.frames[1:],
-            duration=self.durations,
-            loop=0,
-            optimize=True,
-            disposal=2,
-        )
-
-    @property
-    def total_ms(self) -> int:
-        return sum(self.durations)
+from _gif_lib import (
+    BLUE,
+    BOLD_W,
+    CYAN,
+    DIM,
+    FG,
+    GREEN,
+    PINK,
+    PURPLE,
+    YELLOW,
+    Builder,
+    L,
+    S,
+    ok,
+    warn,
+)
 
 
 # ── 1. install.gif ────────────────────────────────────────────────────────────
 def build_install() -> Builder:
-    b = Builder("eidetic — ~/atlas-os — zsh")
+    b = Builder()
     b.cmd("pip install eidetic-os")
     b.reveal(L(S("Collecting eidetic-os", FG)))
-    b.hold(350)
-    b.progress_download("Downloading eidetic_os-1.2.0-py3-none-any.whl (45 kB)", 45.0, steps=30)
-    b.hold(500)
-    b.reveal(L(S("Installing collected packages: eidetic-os", FG)))
-    b.hold(900)
-    b.reveal(L(S("Successfully installed eidetic-os-1.2.0", GREEN, bold=True)))
-    b.hold(1400)
-    b.cmd("eidetic --version")
-    b.reveal(L(S("Eidetic OS ", BOLD_W, bold=True), S("v1.2.0", CYAN, bold=True)))
+    b.hold(280)
+    b.bar("Downloading eidetic_os-3.0.0-py3-none-any.whl (62 kB)", 62.0,
+          unit="kB", steps=26)
+    b.spin("Installing collected packages…", "eidetic-os-3.0.0")
+    b.reveal(L(S("Successfully installed eidetic-os-3.0.0", GREEN, bold=True)))
+    b.hold(1100)
+
+    b.clear()
+    b.cmd("eidetic init")
+    b.spin("Detecting vault + local LLM backends…",
+           "LM Studio @ :5555 · vault @ ~/vault")
+    b.reveal(ok(S("Scaffolded .eidetic/ · .rag/ · wiki/", FG)))
+    b.reveal(ok(S("Wrote ~/vault/.env ", FG), S("(14 keys)", DIM)))
+    b.reveal(L(S("  ✓ You're ready!", GREEN, bold=True)))
+    b.hold(1100)
+
+    b.clear()
+    b.cmd("eidetic doctor")
+    b.reveal(ok(S("config       ", FG), S(".env · 14 keys loaded", DIM)))
+    b.reveal(ok(S("llm          ", FG), S("LM Studio :5555 reachable", DIM)))
+    b.reveal(ok(S("embeddings   ", FG), S("nomic-embed-text · 768-dim", DIM)))
+    b.reveal(ok(S("vector store ", FG), S("21,438 chunks · sqlite-vec", DIM)))
+    b.reveal(ok(S("vault git    ", FG), S("clean · 3 commits", DIM)))
+    b.reveal(L(S("  14 OK", GREEN, bold=True), S("  ·  ", DIM),
+               S("0 WARN", DIM), S("  ·  ", DIM), S("0 FAIL", DIM)))
     b.end_prompt(2400)
     return b
 
 
-# ── 2. setup.gif ──────────────────────────────────────────────────────────────
+# ── 2. setup.gif (the interactive wizard) ─────────────────────────────────────
 def build_setup() -> Builder:
-    b = Builder("eidetic — ~/atlas-os — zsh")
+    b = Builder()
     b.cmd("eidetic init")
-    b.reveal(L())
-    b.reveal(L(S("  ▲  Eidetic OS — Interactive Setup", CYAN, bold=True)))
-    b.reveal(L())
-    # typed input: vault path (pause = user reading the prompt before typing)
-    b.append(L(S("  Vault path [~/vault]: ", FG), S("~/Documents/my-vault", BLUE)))
-    b.typewrite(blink_before=True, ms=70)
-    b.hold(450)
-    b.reveal(L(S("  ✓ ", GREEN), S("Created ~/Documents/my-vault", FG)))
-    b.reveal(L())
-    b.reveal(L(S("  Scanning for LLM backends…", FG)))
-    b.hold(1100)
-    b.reveal(L(S("  ✓ ", GREEN), S("Found LM Studio at localhost:5555 ", FG), S("(qwen3.5-9b)", DIM)))
-    b.hold(350)
-    b.reveal(L(S("  ✓ ", GREEN), S("Found Ollama at localhost:11434 ", FG), S("(llama3.2)", DIM)))
-    b.reveal(L())
-    b.hold(500)
-    # typed input: email y/N
-    b.append(L(S("  Email notifications? [y/N]: ", FG), S("y", BLUE)))
-    b.typewrite(blink_before=True, ms=70)
-    b.hold(450)
-    b.append(L(S("  SMTP email: ", FG), S("user@example.com", BLUE)))
-    b.typewrite(blink_before=True, ms=70)
-    b.hold(450)
-    b.reveal(L(S("  ✓ ", GREEN), S(".env written", FG)))
-    b.reveal(L())
-    b.hold(600)
-    b.reveal(L(S("  ✓ You're ready! ", GREEN, bold=True), S("Run 'eidetic doctor' to verify.", FG)))
+    b.reveal(L(S("  ▲  Eidetic OS — interactive setup", CYAN, bold=True)))
+    b.blank()
+    b.answer([S("  Vault path ", FG), S("[~/vault]", DIM), S(": ", FG)],
+             "~/Documents/my-vault")
+    b.hold(380)
+    b.reveal(ok(S("Created ~/Documents/my-vault", FG)))
+    b.blank()
+    b.spin("Scanning for local LLM backends…", "found 2 endpoints")
+    b.reveal(ok(S("LM Studio @ localhost:5555 ", FG), S("(qwen2.5)", DIM)))
+    b.reveal(ok(S("Ollama @ localhost:11434 ", FG), S("(llama3.2)", DIM)))
+    b.blank()
+    b.answer([S("  Embedding model ", FG), S("[nomic-embed-text]", DIM), S(": ", FG)],
+             "↵")
+    b.reveal(ok(S("Embeddings: nomic-embed-text · 768-dim", FG)))
+    b.blank()
+    b.answer([S("  Email notifications? ", FG), S("[y/N]", DIM), S(": ", FG)], "y")
+    b.answer([S("  SMTP sender ", FG), S(": ", FG)], "you@example.com")
+    b.reveal(ok(S(".env written ", FG), S("(14 keys)", DIM)))
+    b.blank()
+    b.reveal(L(S("  ✓ Ready! ", GREEN, bold=True),
+               S("Run 'eidetic doctor' to verify.", FG)))
     b.end_prompt(2600)
     return b
 
 
-# ── 3. search.gif ─────────────────────────────────────────────────────────────
-def _result(score: str, path: str, heading: str, snippet: str) -> list[Line]:
+# ── 3. search.gif (hybrid RAG fusion) ─────────────────────────────────────────
+def _hit(score: str, path: str, heading: str, fusion: str, snippet: str) -> list[L]:
     return [
-        L(S(f"[{score}] ", YELLOW), S(path, BLUE)),
-        L(S("      › ", DIM), S(heading, MAGENTA)),
-        L(S(f'      {snippet}', DIM)),
+        L(S(f"  [{score}] ", YELLOW), S(path, BLUE), S(f"  › {heading}", PINK)),
+        L(S("         ", FG), S(fusion, DIM)),
+        L(S(f'         {snippet}', DIM)),
         L(),
     ]
 
 
 def build_search() -> Builder:
-    b = Builder("eidetic — ~/atlas-os — zsh")
-    b.cmd('eidetic search "kubernetes deployment strategy"')
-    b.reveal(L())
-    b.reveal(L(S("Searching ", FG), S("2,451", BOLD_W, bold=True), S(" chunks across ", FG), S("312", BOLD_W, bold=True), S(" files…", FG)))
-    b.reveal(L())
-    b.hold(1100)
-    for line in _result(
-        "0.94", "wiki/sources/k8s-rolling-updates.md", "Rolling Update Strategy",
-        '"Use maxSurge and maxUnavailable to control…"',
-    ):
-        b.reveal(line)
-    b.hold(1150)
-    for line in _result(
-        "0.87", "wiki/sources/devops-runbook.md", "Blue-Green Deployments",
-        '"Route traffic between two identical environments…"',
-    ):
-        b.reveal(line)
-    b.hold(1150)
-    for line in _result(
-        "0.82", "wiki/session-logs/2026-05-28.md", "Infrastructure Discussion",
-        '"Decided on canary deployments for the…"',
-    ):
-        b.reveal(line)
-    b.hold(900)
-    b.reveal(L(S("4 results ", BOLD_W, bold=True), S("(hybrid BM25 + vector, 0.3s)", DIM)))
+    b = Builder()
+    b.cmd('eidetic search "what vector database did we choose"')
+    b.blank()
+    b.reveal(L(S("Searching ", FG), S("21,438", BOLD_W, bold=True),
+               S(" chunks · fusing ", FG), S("BM25", CYAN),
+               S(" + ", FG), S("vector", CYAN), S(" via ", FG),
+               S("RRF", PURPLE), S("…", FG)))
+    b.blank()
+    b.hold(1000)
+    for ln in _hit("0.94", "wiki/decisions/vector-store.md", "Why sqlite-vec",
+                   "bm25 #3  ·  vector #1  →  rrf 0.94",
+                   '"Chose sqlite-vec — zero-ops, embedded, scales to ~100k…"'):
+        b.reveal(ln)
+    b.hold(700)
+    for ln in _hit("0.88", "session-logs/2026-05-20.md", "Backend comparison",
+                   "bm25 #1  ·  vector #4  →  rrf 0.88",
+                   '"LanceDB vs Chroma vs sqlite-vec — benchmarked recall and…"'):
+        b.reveal(ln)
+    b.hold(700)
+    for ln in _hit("0.81", "wiki/sources/rag-notes.md", "Pluggable backends",
+                   "bm25 #6  ·  vector #2  →  rrf 0.81",
+                   '"A backend protocol lets you swap stores without re-indexing…"'):
+        b.reveal(ln)
+    b.reveal(L(S("  3 results ", BOLD_W, bold=True),
+               S("· hybrid beats keyword-only & vector-only · 0.18s", DIM)))
     b.end_prompt(2600)
     return b
 
 
 # ── 4. dashboard.gif ──────────────────────────────────────────────────────────
+def _panel(name: str, desc: str) -> L:
+    return ok(S(f"{name:<9}", FG), S(desc, DIM))
+
+
 def build_dashboard() -> Builder:
-    b = Builder("eidetic — ~/atlas-os — zsh")
+    b = Builder()
     b.cmd("eidetic dashboard")
     b.reveal(L(S("  ▲  Eidetic OS Dashboard", CYAN, bold=True)))
-    b.reveal(L(S("Starting on ", FG), S("http://localhost:8501", BLUE), S("…", FG)))
-    b.reveal(L())
-    b.hold(1100)
-    b.reveal(L(S("  ✓ ", GREEN), S("System health: ", FG), S("12 OK", GREEN), S(" · ", DIM), S("0 WARN", DIM), S(" · ", DIM), S("0 FAIL", DIM)))
-    b.hold(300)
-    b.reveal(L(S("  ✓ ", GREEN), S("Vector store: ", FG), S("2,451", BOLD_W, bold=True), S(" chunks · ", FG), S("312", BOLD_W, bold=True), S(" files", FG)))
-    b.hold(300)
-    b.reveal(L(S("  ✓ ", GREEN), S("Skills: ", FG), S("8", BOLD_W, bold=True), S(" installed", FG)))
-    b.reveal(L())
-    b.hold(900)
-    b.reveal(L(S("Dashboard ready → ", BOLD_W, bold=True), S("http://localhost:8501", BLUE)))
+    b.spin("Starting local Flask server…", "bound to 127.0.0.1:8501")
+    b.blank()
+    b.reveal(L(S("  Panels", BOLD_W, bold=True)))
+    b.reveal(_panel("Health", "12 subsystem probes · all green"))
+    b.reveal(_panel("Audit", "every command, who/what/when"))
+    b.reveal(_panel("Tasks", "scheduled skills + cadences"))
+    b.reveal(_panel("Skills", "160-skill catalog"))
+    b.reveal(_panel("Vectors", "21,438 chunks · sqlite-vec"))
+    b.reveal(_panel("RAG", "live hybrid search box"))
+    b.reveal(_panel("Graph", "D3 force-directed note map"))
+    b.blank()
+    b.reveal(L(S("  ➜ Dashboard running at ", GREEN, bold=True),
+               S("http://localhost:8501", BLUE)))
     b.end_prompt(2800)
+    return b
+
+
+# ── 5. skills.gif (catalog · sandboxed run · MCP) ─────────────────────────────
+def _skill(slug: str, cadence: str, desc: str) -> L:
+    return L(S(f"  {slug:<20}", CYAN), S(f"{cadence:<12}", DIM), S(desc, FG))
+
+
+def build_skills() -> Builder:
+    b = Builder()
+    b.cmd("eidetic skills list")
+    b.reveal(L(S("Agent skills ", BOLD_W, bold=True), S("(160 skills)", DIM)))
+    b.blank()
+    b.reveal(L(S("  Security", PURPLE, bold=True)))
+    b.reveal(_skill("security-audit", "on-demand", "AST + secret scan over a repo"))
+    b.reveal(_skill("threat-model", "on-demand", "STRIDE pass on a design doc"))
+    b.reveal(L(S("  DevOps", PURPLE, bold=True)))
+    b.reveal(_skill("k8s-review", "on-demand", "Lint manifests for footguns"))
+    b.reveal(L(S("  Eidetic-native", PURPLE, bold=True)))
+    b.reveal(_skill("autoresearch", "on-demand", "Research a topic → wiki note"))
+    b.reveal(_skill("daily-digest", "daily", "Summarise notes, email a brief"))
+    b.hold(1500)
+
+    b.clear()
+    b.cmd("eidetic skills run security-audit --target ./app")
+    b.spin("AST scan (142 files)…", "3 findings")
+    b.spin("Sandboxed exec (no network, read-only fs)…", "complete")
+    b.reveal(warn(S("app/auth.py:88  hardcoded fallback secret", FG)))
+    b.reveal(warn(S("app/api.py:31   unparameterised SQL", FG)))
+    b.reveal(ok(S("report → ", FG), S("vault/audits/security-audit.md", BLUE)))
+    b.hold(1500)
+
+    b.clear()
+    b.cmd("eidetic mcp serve")
+    b.spin("Exposing Eidetic OS over the Model Context Protocol…", "ready")
+    b.reveal(L(S("  MCP server on stdio · ", FG),
+               S("7 tools", BOLD_W, bold=True),
+               S(" (search, embed, skills, graph…)", DIM)))
+    b.end_prompt(2400)
+    return b
+
+
+# ── 6. extensions.gif ─────────────────────────────────────────────────────────
+def _ext(name: str, version: str, source: str, desc: str) -> list[L]:
+    return [
+        L(S(f"  {name:<9}", CYAN), S(f"v{version}  ", FG),
+          S(f"[{source}]", DIM)),
+        L(S(f"    {desc}", DIM)),
+    ]
+
+
+def build_extensions() -> Builder:
+    b = Builder()
+    b.cmd("pip install 'eidetic-os[trading]'")
+    b.bar("Downloading trading extras (yfinance, TradingAgents)", 4.0,
+          unit="MB", steps=24)
+    b.reveal(L(S("Successfully installed eidetic-os-3.0.0 ", GREEN, bold=True),
+               S("+ trading", PINK, bold=True)))
+    b.hold(1100)
+
+    b.clear()
+    b.cmd("eidetic extensions list")
+    b.reveal(L(S("Extensions ", BOLD_W, bold=True), S("(3 discovered)", DIM)))
+    b.blank()
+    for ln in _ext("trading", "1.0.0", "entry-point",
+                   "Trading research briefings (TradingAgents) → vault"):
+        b.reveal(ln)
+    for ln in _ext("voice", "0.1.0", "built-in",
+                   "Text-to-speech for Eidetic output via local TTS"):
+        b.reveal(ln)
+    for ln in _ext("jobs", "0.1.0", "built-in",
+                   "Job-application tracking stored as vault notes"):
+        b.reveal(ln)
+    b.hold(1500)
+
+    b.clear()
+    b.cmd("eidetic trading --ticker NVDA")
+    b.spin("Running analyst agents (local LLM)…",
+           "technical · fundamentals · sentiment · news")
+    b.reveal(ok(S("briefing → ", FG), S("vault/trading/NVDA-2026-06-06.md", BLUE)))
+    b.reveal(L(S("  signal ", FG), S("BUY", GREEN, bold=True),
+               S("  ·  confidence ", FG), S("0.72", YELLOW),
+               S("  ·  ", DIM), S("not financial advice", DIM)))
+    b.end_prompt(2600)
     return b
 
 
@@ -346,6 +260,8 @@ def main() -> None:
         "setup.gif": build_setup,
         "search.gif": build_search,
         "dashboard.gif": build_dashboard,
+        "skills.gif": build_skills,
+        "extensions.gif": build_extensions,
     }
     for name, build in targets.items():
         b = build()
@@ -353,7 +269,7 @@ def main() -> None:
         b.save(out)
         print(
             f"{name:<16} {len(b.frames):>4} frames · "
-            f"{b.total_ms/1000:>5.1f}s · {out.stat().st_size/1024:>6.0f} KB"
+            f"{b.total_ms / 1000:>5.1f}s · {out.stat().st_size / 1024:>6.0f} KB"
         )
 
 

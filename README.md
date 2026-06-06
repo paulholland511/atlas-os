@@ -854,6 +854,8 @@ it carries `type: reference` frontmatter, the RAG indexer picks it up, and any
 agent that reads or searches your vault can discover the full menu of automations
 it can invoke.
 
+![Skills catalog, a sandboxed run, and the MCP server](skills.gif)
+
 ```bash
 eidetic skills              # list the catalog in the terminal
 eidetic skills show <name>  # print a skill's SKILL.md
@@ -886,7 +888,10 @@ how to author your own — with a copy-paste `SKILL.md` template.
 A small, dependency-light multi-agent framework in [`trading/`](trading/README.md).
 Four analyst agents — **technical, fundamentals, sentiment, news** — produce
 per-asset signals from a **local** LLM, and an optional **Portfolio Manager**
-step synthesises them into a final recommendation.
+step synthesises them into a final recommendation. It ships as an opt-in
+**extension** — install the extra, and `eidetic trading` registers itself:
+
+![Install an extra, discover extensions, run eidetic trading](extensions.gif)
 
 ```
  [Local LLM] technical + fundamentals + sentiment + news → briefing.md

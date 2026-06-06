@@ -16,6 +16,7 @@ Subcommands:
 * ``eidetic email``    — send an email          (wraps scripts/send_email.py)
 * ``eidetic schemas``  — enforce frontmatter     (wraps schemas/enforce_schemas.py)
 * ``eidetic session``  — save Cowork transcripts (wraps scripts/save_sessions.py)
+* ``eidetic consolidate``— sleeptime memory consolidation of recent session logs
 * ``eidetic audit``    — inspect the append-only audit trail (show | tail | export)
 * ``eidetic dashboard``— launch the local web dashboard (needs the dashboard extra)
 * ``eidetic extensions``— list/inspect optional extensions (trading, voice, jobs)
@@ -56,6 +57,7 @@ from dotenv import load_dotenv
 
 from eidetic_os import __version__, audit
 from eidetic_os import backends as llm_backends
+from eidetic_os import facts as facts_engine
 from eidetic_os import fileio, frontmatter, git_sync, gitutil
 from eidetic_os import _skills, marketplace, packs, security
 from eidetic_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
@@ -609,6 +611,108 @@ def validate(
             typer.echo(f"      → {err}")
     _echo_fail(f"{len(report.failures)} file(s) with invalid frontmatter")
     raise typer.Exit(code=1)
+
+
+@app.command()
+def consolidate(
+    daemon: bool = typer.Option(
+        False, "--daemon", help="Run continuously, consolidating every --interval hours."
+    ),
+    status: bool = typer.Option(
+        False, "--status", help="Show last run, pending sessions, and stats (no writes)."
+    ),
+    interval: float = typer.Option(
+        6.0, "--interval", help="Hours between passes in --daemon mode."
+    ),
+    no_llm: bool = typer.Option(
+        False, "--no-llm", help="Force heuristic extraction even if a backend is up."
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit a machine-readable summary."
+    ),
+) -> None:
+    """Consolidate recent session logs into a single merged memory note.
+
+    The sleeptime daemon scans ``$VAULT_PATH/sessions/`` for logs written since the
+    last pass, distils each to its decisions/actions/topics/files, merges them
+    (resolving contradictions in favour of the most recent), and writes
+    ``wiki/consolidated/YYYY-MM-DD.md``. With no flags it runs a single pass;
+    ``--daemon`` loops every ``--interval`` hours; ``--status`` just reports state.
+    """
+    from eidetic_os import sleeptime
+
+    _require_env("VAULT_PATH")
+    vault = _resolve_vault()
+    assert vault is not None  # _require_env guarantees VAULT_PATH is set
+
+    if status:
+        info = sleeptime.consolidation_status(vault)
+        if as_json:
+            typer.echo(json.dumps(info, indent=2))
+            raise typer.Exit(code=0)
+        typer.secho("\nConsolidation status\n", bold=True)
+        last = info["last_consolidation"] or "never"
+        _echo_ok(f"vault: {info['vault_path']}")
+        typer.echo(f"      last consolidation : {last}")
+        typer.echo(f"      sessions pending   : {info['sessions_pending']}")
+        typer.echo(f"      consolidated notes : {info['consolidated_notes']}")
+        if info["latest_note"]:
+            typer.echo(f"      latest note        : {info['latest_note']}")
+        typer.echo(
+            f"      facts integration  : "
+            f"{'enabled' if info['facts_integration'] else 'unavailable'}"
+        )
+        raise typer.Exit(code=0)
+
+    engine = sleeptime.ConsolidationDaemon(
+        vault, interval_hours=interval, use_llm=not no_llm
+    )
+
+    if daemon:
+        _echo_ok(f"sleeptime daemon started — consolidating every {interval:g}h")
+        typer.echo("      press Ctrl-C to stop.")
+        engine.start()
+        try:
+            while engine.is_running:
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            typer.echo("")
+            _echo_warn("stopping daemon…")
+            engine.stop()
+            _echo_ok("daemon stopped")
+        raise typer.Exit(code=0)
+
+    note = engine.run_once()
+    if as_json:
+        payload = (
+            {
+                "consolidated": True,
+                "date": note.date,
+                "sessions_processed": note.sessions_processed,
+                "decisions": len(note.decisions),
+                "actions": len(note.actions),
+                "topics": len(note.topics),
+                "files_touched": len(note.files_touched),
+                "contradictions": note.contradictions,
+            }
+            if note is not None
+            else {"consolidated": False, "reason": "nothing new to consolidate"}
+        )
+        typer.echo(json.dumps(payload, indent=2))
+        raise typer.Exit(code=0)
+
+    if note is None:
+        _echo_warn("nothing new to consolidate")
+        raise typer.Exit(code=0)
+    _echo_ok(
+        f"consolidated {len(note.sessions_processed)} session(s) → "
+        f"wiki/consolidated/{note.date}.md"
+    )
+    typer.echo(
+        f"      {len(note.decisions)} decision(s), {len(note.actions)} action(s), "
+        f"{len(note.contradictions)} contradiction(s) resolved"
+    )
+    raise typer.Exit(code=0)
 
 
 @app.command(context_settings=_PASSTHROUGH)
@@ -1645,6 +1749,147 @@ def session_list(
     if as_json:
         args.append("--json")
     _run(scripts_dir() / "save_sessions.py", args)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# facts — Mem0-style fact extraction and a deduplicated fact store
+# ─────────────────────────────────────────────────────────────────────────────
+facts_app = typer.Typer(
+    no_args_is_help=True,
+    help="Extract, store, and search discrete facts (Mem0-style memory).",
+)
+app.add_typer(facts_app, name="facts")
+
+
+def _fmt_fact(fact: facts_engine.StoredFact, *, score: float | None = None) -> str:
+    """One-line coloured rendering of a stored fact for `facts list`/`search`."""
+    cat = typer.style(f"{fact.category:<10}", fg=typer.colors.CYAN)
+    conf = typer.style(f"{fact.confidence:.2f}", fg=typer.colors.BRIGHT_BLACK)
+    line = f"  [{fact.id}] {cat} {conf}"
+    if score is not None:
+        line += typer.style(f" ·{score:.2f}", fg=typer.colors.GREEN)
+    line += f"  {fact.fact}"
+    if fact.source:
+        line += typer.style(f"  ({fact.source})", fg=typer.colors.BRIGHT_BLACK)
+    return line
+
+
+@facts_app.command("extract")
+def facts_extract(
+    file: Path = typer.Argument(..., help="Markdown/text file to extract facts from."),
+    no_llm: bool = typer.Option(
+        False, "--no-llm", help="Skip the LLM extractor; use the heuristic only."
+    ),
+    threshold: float = typer.Option(
+        facts_engine.DEFAULT_DEDUP_THRESHOLD, "--threshold",
+        help="Dedup similarity threshold (0-1). Higher keeps more near-duplicates.",
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit the tally as JSON."),
+) -> None:
+    """Extract facts from a file and store them, deduplicating against memory.
+
+    Prefers the detected local LLM for extraction (and embeddings for semantic
+    dedup); falls back to a heuristic extractor and token-overlap dedup when no
+    backend is reachable. Pass ``--no-llm`` to force the offline path.
+    """
+    if not file.is_file():
+        _echo_fail(f"not a file: {file}")
+        raise typer.Exit(code=1)
+    text = file.read_text(encoding="utf-8", errors="replace")
+    source = file.name
+
+    with facts_engine.open_store(with_embedder=not no_llm) as store:
+        tally = store.extract_and_ingest(
+            text, source, use_llm=not no_llm, threshold=threshold
+        )
+        total_active = store.count()
+
+    if as_json:
+        typer.echo(json.dumps({**tally, "active_total": total_active}))
+        return
+    typer.secho(f"\nExtracted facts from {source}\n", bold=True)
+    _echo_ok(f"{tally['inserted']} new")
+    if tally["merged"]:
+        _echo_ok(f"{tally['merged']} merged into existing facts")
+    if tally["superseded"]:
+        _echo_warn(f"{tally['superseded']} superseded a contradicting fact")
+    if tally["duplicate"]:
+        typer.echo(f"  · {tally['duplicate']} already known (skipped)")
+    typer.echo(f"\n{total_active} active facts in the store.")
+
+
+@facts_app.command("list")
+def facts_list(
+    category: str = typer.Option(
+        None, "--category", "-c", help=f"Filter by category ({', '.join(facts_engine.CATEGORIES)})."
+    ),
+    limit: int = typer.Option(50, "--limit", "-n", help="Max facts to show."),
+    include_inactive: bool = typer.Option(
+        False, "--all", help="Include superseded (inactive) facts."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit facts as JSON."),
+) -> None:
+    """List stored facts, newest first, optionally filtered by category."""
+    with facts_engine.open_store(with_embedder=False) as store:
+        rows = store.list_facts(
+            category=category, limit=limit, active_only=not include_inactive
+        )
+    if as_json:
+        typer.echo(json.dumps([f.__dict__ for f in rows], indent=2))
+        return
+    if not rows:
+        _echo_warn("no facts stored yet — run `eidetic facts extract <file>`")
+        return
+    typer.secho(f"\n{len(rows)} fact(s)\n", bold=True)
+    for fact in rows:
+        typer.echo(_fmt_fact(fact))
+
+
+@facts_app.command("search")
+def facts_search(
+    query: str = typer.Argument(..., help="Search query."),
+    limit: int = typer.Option(10, "--limit", "-n", help="Max results."),
+    as_json: bool = typer.Option(False, "--json", help="Emit results as JSON."),
+) -> None:
+    """Semantic search over active facts (cosine if a backend is up, else tokens)."""
+    with facts_engine.open_store() as store:
+        results = store.query_facts(query, limit=limit)
+    if as_json:
+        typer.echo(json.dumps(
+            [{"score": s, **f.__dict__} for f, s in results], indent=2
+        ))
+        return
+    if not results:
+        _echo_warn("no matching facts")
+        return
+    typer.secho(f"\n{len(results)} result(s) for {query!r}\n", bold=True)
+    for fact, score in results:
+        typer.echo(_fmt_fact(fact, score=score))
+
+
+@facts_app.command("stats")
+def facts_stats(
+    as_json: bool = typer.Option(False, "--json", help="Emit stats as JSON."),
+) -> None:
+    """Show fact-store statistics: totals, per-category, top sources."""
+    with facts_engine.open_store(with_embedder=False) as store:
+        stats = store.stats()
+    if as_json:
+        typer.echo(json.dumps(stats, indent=2))
+        return
+    typer.secho("\nFact store\n", bold=True)
+    typer.echo(f"  active:     {stats['active']}")
+    typer.echo(f"  superseded: {stats['superseded']}")
+    typer.echo(f"  avg conf:   {stats['avg_confidence']:.2f}")
+    typer.echo(f"  embeddings: {'on' if stats['has_embeddings'] else 'off (offline)'}")
+    if stats["by_category"]:
+        typer.secho("\n  by category", bold=True)
+        for cat, n in stats["by_category"].items():
+            typer.echo(f"    {cat:<12} {n}")
+    if stats["by_source"]:
+        typer.secho("\n  top sources", bold=True)
+        for src, n in stats["by_source"].items():
+            typer.echo(f"    {src:<24} {n}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

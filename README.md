@@ -41,6 +41,7 @@ Everything below is **in the box today** — not roadmap, not "coming soon":
 - 🔍 **Hybrid RAG search** — BM25 keyword + vector semantic search over your whole vault, fused into one ranked result set
 - 📓 **Obsidian vault integration** — point Eidetic at your markdown vault and it becomes a searchable, AI-aware second brain
 - 💾 **Session capture** — every Cowork conversation saved to your vault twice daily
+- 🧠 **Mem0-style fact memory** (`eidetic facts`) — distil discrete facts from conversations and deduplicate against existing memory (insert / bump / supersede / merge), with LLM extraction and a heuristic offline fallback
 - 🔌 **Local LLM backends** — auto-detects Ollama, LM Studio, llama.cpp, or any OpenAI-compatible endpoint; nothing leaves your machine
 - 📊 **Web dashboard** (`eidetic dashboard`) — seven live panels: health, audit, tasks, skills, knowledge graph, vectors, RAG search
 - 🕸️ **Visual knowledge graph** — interactive D3 view of how your notes connect (`eidetic graph --open`)
@@ -98,6 +99,7 @@ account.
 - [Architecture](#architecture)
 - [The knowledge vault](#the-knowledge-vault)
 - [Session capture & knowledge persistence](#session-capture--knowledge-persistence)
+- [Fact memory (`eidetic facts`)](#fact-memory-eidetic-facts)
 - [RAG search & knowledge graph](#rag-search--knowledge-graph)
 - [Scheduled tasks & the skills catalog](#scheduled-tasks--the-skills-catalog)
 - [Trading research SDK (optional)](#trading-research-sdk-optional)
@@ -580,6 +582,11 @@ underlying script.
 | `eidetic schemas` | Enforce per-folder frontmatter schemas | `--dry-run`, `--folder`, `--verbose` |
 | `eidetic session save` | Save Cowork chat transcripts to the vault as session logs | `--since`, `--all`, `--sessions-dir`, `--json` |
 | `eidetic session list` | List recent Cowork sessions with dates and titles | `--limit`, `--sessions-dir`, `--json` |
+| `eidetic consolidate` | Sleeptime consolidation of recent session logs into a single merged memory note | `--daemon`, `--status`, `--interval`, `--no-llm`, `--json` |
+| `eidetic facts extract` | Extract discrete facts from a file and store them, deduplicating against memory | `--no-llm`, `--threshold`, `--json` |
+| `eidetic facts list` | List stored facts, newest first | `--category`, `--limit`, `--all`, `--json` |
+| `eidetic facts search` | Semantic search over active facts | `--limit`, `--json` |
+| `eidetic facts stats` | Fact-store statistics (totals, per-category, top sources) | `--json` |
 | `eidetic audit show` | Show recent audit-trail entries | `--limit`, `--action`, `--since` |
 | `eidetic audit tail` | Last 5 audit entries, compact | — |
 | `eidetic audit export` | Export the audit log for compliance | `--format csv\|json`, `--output`, `--action`, `--since` |
@@ -597,6 +604,9 @@ eidetic email -s "Hi" -b "<p>Hello</p>" --to me@example.com
 eidetic email --json '{"to":"me@example.com","subject":"Hi","body_html":"<p>Hi</p>"}'
 eidetic audit show --action commit --since 7d
 eidetic audit export --format csv -o audit-report.csv
+eidetic facts extract sessions/session-log-2026-06-06-trading.md   # distil + store facts
+eidetic facts list --category decision       # browse decisions
+eidetic facts search "risk management"       # semantic recall over facts
 ```
 
 Every command auto-loads `.env` and **validates its required env vars up front**,
@@ -608,7 +618,8 @@ reference — flags, env vars consumed, exit codes, and the v1.0 stability
 contract: [`docs/CLI-REFERENCE.md`](docs/CLI-REFERENCE.md). The underlying scripts
 are documented in [`docs/SCRIPTS.md`](docs/SCRIPTS.md).
 
-> `eidetic init`, `eidetic doctor`, `eidetic skills`, and `eidetic audit` are CLI-only.
+> `eidetic init`, `eidetic doctor`, `eidetic skills`, `eidetic facts`, and `eidetic audit`
+> are CLI-only (backed by in-package modules, not standalone scripts).
 > The rest map 1:1 to scripts in `scripts/` (and `schemas/`), so you can also run
 > them directly, e.g. `python3 scripts/embed_vault.py --full`. Every script
 > command also appends an entry to the [audit trail](#audit-trail).
@@ -762,6 +773,87 @@ The twice-daily pair is part of the [`knowledge` pack](docs/SCHEDULED-TASKS.md),
 so `eidetic skills install-pack knowledge` sets both up alongside the nightly index
 and RAG embed. Full walkthrough:
 [`docs/TUTORIAL.md`](docs/TUTORIAL.md#step-35--capture-your-cowork-sessions-to-the-vault).
+
+---
+
+## Sleeptime consolidation (`eidetic consolidate`)
+
+Session logs accumulate. Capture twice a day for a month and the vault holds ~60
+near-duplicate "ran some commands, edited some files" notes — signal buried in
+repetition. **Sleeptime consolidation** is the compaction pass that runs while
+you're offline: it reads the session logs written since its last run, distils
+each to its **decisions, actions, topics, files, and open questions**, merges them
+into one note, and resolves contradictions in favour of the most recent
+statement.
+
+```bash
+eidetic consolidate            # one pass over everything new
+eidetic consolidate --status   # last run, sessions pending, notes written
+eidetic consolidate --daemon   # background loop, every --interval hours (default 6)
+```
+
+Each pass writes `$VAULT_PATH/wiki/consolidated/YYYY-MM-DD.md` — frontmatter
+tagged `[consolidated, memory, sleeptime]` with `type: consolidated`, so it's
+indexed by the RAG embed like any other note. Extraction is **pure-Python
+heuristics by default — no LLM, nothing leaves your machine**; if a backend is
+reachable it's used to write a richer summary, but it's never required (force the
+offline path with `--no-llm`). When two sessions make conflicting choices for the
+same purpose ("use SQLite for storage" → later "use Postgres for storage"), the
+newer one wins and the contradiction is recorded in the note's *Contradictions
+Resolved* section.
+
+A watermark in `.eidetic/last_consolidation.txt` means a plain `eidetic
+consolidate` only picks up what's new, and an advisory lock on
+`.eidetic/consolidation` keeps a manual run from colliding with the scheduled one.
+When [fact memory](#fact-memory-eidetic-facts) is installed, each session's
+extracted facts are folded into the consolidated note's *Key Facts* section.
+
+---
+
+## Fact memory (`eidetic facts`)
+
+Session logs preserve *what happened*; **fact memory distils what's true**. Raw
+transcripts carry noise — corrections, tangents, the same preference restated
+five different ways — and injecting them wholesale bloats context. Eidetic OS
+takes the [Mem0](https://github.com/mem0ai/mem0) approach instead: extract
+**discrete facts** from a conversation and store each one *once*, deduplicated
+against everything already known (see
+[`eidetic_os/facts.py`](eidetic_os/facts.py)).
+
+```bash
+eidetic facts extract sessions/session-log-2026-06-06-trading.md   # distil + store
+eidetic facts list --category preference                            # browse by type
+eidetic facts search "package manager"                             # semantic recall
+eidetic facts stats                                                # totals & breakdown
+```
+
+A fact is a single self-contained statement — *"Paul prefers `uv` over pip"*,
+*"the trading bot uses Kelly Criterion sizing"* — tagged with a **category**
+(`preference` · `decision` · `technical` · `person` · `project` · `other`), a
+**confidence**, and its **source**. Facts live in a SQLite store at
+`$VAULT_PATH/.eidetic/facts.db` (override with `EIDETIC_FACTS_PATH`).
+
+- **Extraction** prefers your local LLM (whatever
+  [`eidetic_os/backends.py`](eidetic_os/backends.py) detects — LM Studio, Ollama,
+  llama.cpp) with a structured prompt, and **falls back to a dependency-free
+  heuristic extractor** when no backend is reachable. The fallback catches
+  decisions ("decided", "will use"), preferences ("prefer", "always", "never"),
+  technical facts (versions, configs, imports), project notes, and named
+  entities — so `eidetic facts extract` works fully offline.
+- **Deduplication** compares each new fact against the live store by cosine
+  similarity (embeddings) — or token overlap when offline. A near-identical fact
+  just **bumps** the existing one; a **contradiction** (opposite polarity)
+  *supersedes* it — the old fact is soft-deleted (`active = 0`) and retained for
+  history while the new one takes over; an overlapping fact is **merged** into the
+  more informative statement.
+- **Decay** (`FactStore.decay_scores`) ages confidence on a configurable
+  half-life since last access, forgetting facts that fall below a floor — the
+  hook the upcoming [sleeptime consolidation daemon](#-v40--eidetic-os-the-memory-release)
+  will drive.
+
+Because facts are deduplicated and contradiction-resolved, the store converges
+on a compact set of *current beliefs* you can inject into context, rather than an
+ever-growing pile of transcript.
 
 ---
 
@@ -1221,14 +1313,18 @@ is the rebrand-and-remember release: the new **Eidetic** identity plus a leap fr
 "store everything" to **understand and consolidate everything**. The headline
 work — making memory *active* rather than a passive log:
 
-- 🧠 **Mem0-style fact extraction** ([#22](https://github.com/paulholland511/atlas-os/issues/22)) —
+- ✅ **Mem0-style fact extraction** ([#22](https://github.com/paulholland511/atlas-os/issues/22)) —
   distil discrete, atomic facts from raw session transcripts and **deduplicate
-  them against existing memory** (add / update / no-op) instead of appending
-  whole conversations, so the vault stores knowledge, not noise.
+  them against existing memory** (insert / bump / supersede / merge) instead of
+  appending whole conversations, so the vault stores knowledge, not noise. LLM
+  extraction with a heuristic offline fallback, plus a `FactStore` with semantic
+  dedup, contradiction handling, and time-decay. See
+  [Fact memory](#fact-memory-eidetic-facts) (`eidetic facts`). *Shipped.*
 - 😴 **Sleeptime consolidation daemon** ([#23](https://github.com/paulholland511/atlas-os/issues/23)) —
   a background process that compresses and **synthesises dialogue logs offline**
   (during idle/"sleep" time), merging related notes and summarising stale
-  threads the way human memory consolidates overnight.
+  threads the way human memory consolidates overnight. *Shipped — see
+  [`eidetic consolidate`](#sleeptime-consolidation-eidetic-consolidate).*
 - 🧩 **Native Obsidian plugin** ([#24](https://github.com/paulholland511/atlas-os/issues/24)) —
   search, manage, and **visualise the memory index from inside Obsidian** itself:
   hybrid RAG search, the knowledge graph, and memory blocks as a first-class

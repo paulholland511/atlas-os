@@ -10,6 +10,66 @@ Work toward **v4.0.0** — the rebrand-and-remember release. Tracked by the
 **[v4.0.0 milestone](https://github.com/paulholland511/atlas-os/milestone/4)** and
 issues [#22](https://github.com/paulholland511/atlas-os/issues/22)–[#27](https://github.com/paulholland511/atlas-os/issues/27).
 
+### Added
+- **Mem0-style fact-extraction engine** ([#22](https://github.com/paulholland511/atlas-os/issues/22)) —
+  a new [`eidetic_os/facts.py`](eidetic_os/facts.py) module that distils discrete,
+  atomic facts from conversations and **deduplicates them against existing
+  memory**, replacing the append-whole-transcript approach that caused context
+  bloat. Highlights:
+  - `extract_facts(text, source)` extracts facts via the detected local LLM
+    (LM Studio / Ollama / llama.cpp, through `eidetic_os.backends`) with a
+    structured JSON prompt, and **falls back to a dependency-free heuristic
+    extractor** — decision/preference/technical/project/person cues plus named
+    entities — so extraction works fully offline.
+  - `FactStore`, a SQLite-backed store (same approach as
+    [`eidetic_os/vectordb.py`](eidetic_os/vectordb.py)) holding each fact with its
+    source, timestamps, access count, confidence, category, embedding, and an
+    `active` soft-delete flag.
+  - **Deduplication** by cosine similarity (embeddings) or token overlap
+    (offline): a near-identical fact **bumps** the existing one, a contradiction
+    (opposite polarity) **supersedes** it (old soft-deleted, retained for
+    history), and an overlapping fact is **merged** into the more informative
+    statement.
+  - `query_facts` / `get_facts_for_context` for semantic recall and context
+    injection, and `decay_scores` applying half-life confidence decay since last
+    access (the hook the sleeptime daemon, [#23](https://github.com/paulholland511/atlas-os/issues/23),
+    and relevance scoring, [#27](https://github.com/paulholland511/atlas-os/issues/27), will drive).
+  - New CLI command group: `eidetic facts extract <file>`, `eidetic facts list`,
+    `eidetic facts search <query>`, and `eidetic facts stats`. The store lives at
+    `$VAULT_PATH/.eidetic/facts.db` (override with `EIDETIC_FACTS_PATH`).
+  - Full test coverage in [`tests/test_facts.py`](tests/test_facts.py) — CRUD,
+    heuristic + LLM-parsing extraction, all four dedup paths, query/search,
+    context selection, and decay.
+- **Sleeptime memory consolidation daemon** ([#23](https://github.com/paulholland511/atlas-os/issues/23)) —
+  a new [`eidetic_os/sleeptime.py`](eidetic_os/sleeptime.py) module that compresses
+  recent session logs into a single synthesised note while you're offline,
+  reducing the context bloat from dozens of near-duplicate session captures.
+  Highlights:
+  - `ConsolidationDaemon(vault_path, interval_hours=6)` with `run_once()` (a single
+    scheduler-friendly pass) and `start()`/`stop()` for a lightweight interruptible
+    background loop — no heavy frameworks, just a thread and an event.
+  - Each pass scans `$VAULT_PATH/sessions/` for logs modified since the last run
+    (watermark in `.eidetic/last_consolidation.txt`), distils each to its
+    **decisions, actions, topics, files, and open questions**, merges them, and
+    writes `$VAULT_PATH/wiki/consolidated/YYYY-MM-DD.md` with `type: consolidated`
+    frontmatter that passes the automated-commit validation gate.
+  - **Heuristic extraction by default** (regex for decision/action/file/heading/
+    question cues) so consolidation runs fully offline; an LLM backend is used for
+    a richer summary when reachable but is never required.
+  - **Contradiction resolution** — when two sessions make conflicting choices for
+    the same purpose, the most recent wins and the change is recorded in the note's
+    *Contradictions Resolved* section.
+  - **Optional fact integration** — when [`facts.py`](eidetic_os/facts.py) (#22) is
+    present, each session's extracted facts are folded into a *Key Facts* section;
+    the import degrades gracefully so the daemon works standalone.
+  - Single-writer safety via the advisory `vault_lock` on `.eidetic/consolidation`;
+    every pass is recorded in the audit trail.
+  - New CLI command: `eidetic consolidate` (`--daemon`, `--status`, `--interval`,
+    `--no-llm`, `--json`).
+  - Full test coverage in [`tests/test_sleeptime.py`](tests/test_sleeptime.py) —
+    noise stripping, all extractors, contradiction detection, watermark tracking,
+    end-to-end passes, status, and the daemon lifecycle.
+
 ### Changed
 - **Rebranded from Atlas OS to Eidetic OS.** The project's first three major
   versions shipped as *Atlas OS*; the name collided with [AtlasOS](https://atlasos.net/)

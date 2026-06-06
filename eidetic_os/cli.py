@@ -56,11 +56,12 @@ import requests
 import typer
 from dotenv import load_dotenv
 
-from eidetic_os import __version__, audit
+from eidetic_os import __version__, audit, audit_crypto
 from eidetic_os import backends as llm_backends
 from eidetic_os import facts as facts_engine
 from eidetic_os import fileio, frontmatter, git_sync, gitutil
 from eidetic_os import _skills, marketplace, migration, packs, security
+from eidetic_os import verify as verify_engine
 from eidetic_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from eidetic_os._probe import Endpoint, detect_endpoints
 from eidetic_os._skills import default_catalog_path, load_skills, render_catalog
@@ -1644,6 +1645,78 @@ def audit_export(
         typer.echo(text)
 
 
+@audit_app.command("keygen")
+def audit_keygen(
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite an existing key (old signatures stay verifiable)."
+    ),
+) -> None:
+    """Generate a new Ed25519 signing keypair for the audit trail."""
+    if not audit_crypto.CRYPTO_AVAILABLE:
+        _echo_fail("'cryptography' is not installed — run `pip install cryptography`.")
+        raise typer.Exit(code=1)
+
+    key_path = audit_crypto.default_key_path()
+    if key_path.exists() and not force:
+        _echo_warn(f"key already exists at {key_path} — pass --force to replace it.")
+        raise typer.Exit(code=1)
+
+    signer = audit_crypto.AuditSigner(key_path)
+    if force:
+        signer.generate_keypair()
+    audit_crypto.reset_default_signer()
+    _echo_ok(f"signing key ready → {key_path}")
+    _echo_ok(f"public key → {key_path.with_suffix(key_path.suffix + '.pub')}")
+
+
+@audit_app.command("sign")
+def audit_sign() -> None:
+    """Retroactively sign every unsigned entry in the audit trail."""
+    if not audit_crypto.CRYPTO_AVAILABLE:
+        _echo_fail("'cryptography' is not installed — run `pip install cryptography`.")
+        raise typer.Exit(code=1)
+
+    path = audit.audit_path()
+    if not path.exists():
+        typer.echo("No audit trail to sign yet.")
+        return
+
+    signer = audit_crypto.AuditSigner()
+    signed = signer.sign_trail(path)
+    audit_crypto.reset_default_signer()
+    if signed == 0:
+        _echo_ok("audit trail already fully signed — nothing to do.")
+    else:
+        _echo_ok(f"signed {signed} entr(y/ies) → {path}")
+
+
+@audit_app.command("verify")
+def audit_verify() -> None:
+    """Verify the audit trail's signatures and hash chain end to end."""
+    if not audit_crypto.CRYPTO_AVAILABLE:
+        _echo_fail("'cryptography' is not installed — run `pip install cryptography`.")
+        raise typer.Exit(code=1)
+
+    path = audit.audit_path()
+    if not path.exists():
+        typer.echo("No audit trail to verify yet.")
+        return
+
+    result = audit_crypto.AuditSigner().verify_trail(path)
+    typer.secho(f"\n{result.summary()}\n", bold=True)
+    typer.echo(f"  verified : {result.verified}")
+    if result.unsigned:
+        _echo_warn(f"unsigned : {result.unsigned}")
+    if result.tampered:
+        _echo_fail(f"tampered : {result.tampered} (first at line {result.first_tampered_line})")
+
+    if result.ok:
+        _echo_ok("audit trail is intact and fully verified.")
+    else:
+        _echo_fail("audit trail integrity check FAILED.")
+        raise typer.Exit(code=1)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # security — scan skills for dangerous code and review the install audit
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1730,6 +1803,101 @@ def security_report(
         ts = str(entry.get("timestamp", ""))[:19]
         context = str(entry.get("context", ""))
         typer.echo(f"  {ts}  {mark} {context}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# verify — structured verification gates (GROUND-style 5-tier pipeline)
+# ─────────────────────────────────────────────────────────────────────────────
+def _print_verification_report(report: verify_engine.VerificationReport) -> None:
+    """Render a :class:`VerificationReport` as a per-tier checklist."""
+    status = "PASS" if report.passed else "FAIL"
+    colour = typer.colors.GREEN if report.passed else typer.colors.RED
+    typer.secho(
+        f"\nVerification of {report.target} — {status} "
+        f"({report.total_duration_ms} ms)\n",
+        fg=colour,
+        bold=True,
+    )
+    for result in report.tiers:
+        if result.passed:
+            mark, tier_colour = "✓", typer.colors.GREEN
+        elif result.blocking:
+            mark, tier_colour = "✗", typer.colors.RED
+        else:
+            mark, tier_colour = "!", typer.colors.YELLOW
+        badge = typer.style(f"{mark} {result.tier.value:<8}", fg=tier_colour, bold=True)
+        typer.echo(f"  {badge} {result.details}  ({result.duration_ms} ms)")
+
+    if report.blocked_at is not None:
+        typer.echo()
+        _echo_fail(
+            f"blocked at the {report.blocked_at} tier — execution gated, "
+            "remaining tiers skipped"
+        )
+
+
+@app.command("verify")
+def verify_cmd(
+    path: Path = typer.Argument(
+        ..., help="File or skill directory to run the verification gates against."
+    ),
+    tier: str = typer.Option(
+        None,
+        "--tier",
+        help="Comma-separated subset of tiers to run: syntax,imports,tests,runtime,diff.",
+    ),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit the full report as JSON instead of a checklist."
+    ),
+    timeout: int = typer.Option(
+        verify_engine.DEFAULT_RUNTIME_TIMEOUT_SECONDS,
+        "--timeout",
+        help="Wall-clock seconds for the RUNTIME sandbox.",
+    ),
+    memory_mb: int = typer.Option(
+        verify_engine.DEFAULT_RUNTIME_MEMORY_MB,
+        "--memory-mb",
+        help="Memory cap (MB) for the RUNTIME sandbox.",
+    ),
+    allow_network: bool = typer.Option(
+        False, "--allow-network", help="Permit network access in the RUNTIME sandbox."
+    ),
+) -> None:
+    """Run the GROUND-style verification pipeline over a file or skill.
+
+    Five ordered gates — syntax, imports, tests, runtime, diff — vet the target
+    before it is run autonomously or deployed. The pipeline stops at the first
+    *blocking* gate that fails. Exits non-zero when the overall report fails, so
+    it doubles as a CI / pre-execution gate. Every run is recorded in the audit
+    trail.
+    """
+    if not path.exists():
+        _echo_fail(f"no such path: {path}")
+        raise typer.Exit(code=2)
+
+    tiers: tuple[verify_engine.Tier, ...] | None = None
+    if tier:
+        try:
+            tiers = verify_engine.parse_tiers(tier)
+        except ValueError as exc:
+            _echo_fail(str(exc))
+            raise typer.Exit(code=2) from exc
+
+    report = verify_engine.verify(
+        path,
+        tiers=tiers,
+        runtime_timeout=timeout,
+        runtime_memory_mb=memory_mb,
+        allow_network=allow_network,
+    )
+
+    if as_json:
+        typer.echo(report.to_json())
+    else:
+        _print_verification_report(report)
+
+    if not report.passed:
+        raise typer.Exit(code=1)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

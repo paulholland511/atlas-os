@@ -56,6 +56,7 @@ Everything below is **in the box today** — not roadmap, not "coming soon":
 - 🧩 **Extension architecture** — a lean core plus opt-in domain extensions (`pip install 'eidetic-os[trading]'`), discovered via setuptools entry points
 - 🔗 **MCP-native skills** — every skill is a Model Context Protocol server, usable from Claude Code, Cowork, and any MCP host (`eidetic mcp serve`)
 - 🛡️ **Skill security gate** — AST scan (BLOCK / WARN / INFO) plus a sandboxed runtime before community skills run (`eidetic security scan`)
+- ✅ **Verification gates** — a GROUND-style 5-tier pipeline (syntax · imports · tests · runtime · diff) that vets code before autonomous execution, halting at the first blocking failure (`eidetic verify`)
 - 🔒 **Hardened git sync** — favour-local merges that never clobber your edits, frontmatter validation, and file locking (`eidetic sync`, `eidetic validate`)
 - 🗄️ **Pluggable vector storage** — `sqlite-vec` by default, swap in LanceDB or ChromaDB via `VECTOR_BACKEND` (`eidetic migrate-vectors --to`)
 
@@ -107,6 +108,7 @@ account.
 - [Email reports](#email-reports)
 - [Dashboard (optional)](#dashboard-optional)
 - [Audit trail](#audit-trail)
+- [Verification gates (`eidetic verify`)](#verification-gates-eidetic-verify)
 - [Security & privacy](#security--privacy)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -602,6 +604,11 @@ underlying script.
 | `eidetic audit show` | Show recent audit-trail entries | `--limit`, `--action`, `--since` |
 | `eidetic audit tail` | Last 5 audit entries, compact | — |
 | `eidetic audit export` | Export the audit log for compliance | `--format csv\|json`, `--output`, `--action`, `--since` |
+| `eidetic audit keygen` | Generate the Ed25519 audit-signing keypair | `--force` |
+| `eidetic audit verify` | Verify audit signatures + the SHA-256 hash chain | — |
+| `eidetic audit sign` | Retroactively sign unsigned audit entries | — |
+| `eidetic security scan` | Statically scan a skill/file for dangerous code patterns (AST) | — |
+| `eidetic verify` | Run the GROUND-style verification pipeline (syntax · imports · tests · runtime · diff) | `--tier`, `--json`, `--timeout`, `--memory-mb`, `--allow-network` |
 
 ```bash
 # examples
@@ -1246,6 +1253,92 @@ eidetic audit export --format csv -o audit-report.csv   # for compliance
 
 This logging directly supports ISO 27001 control **A.12.4 (Logging &
 monitoring)** — see [SECURITY.md](SECURITY.md).
+
+### Cryptographic signatures (`eidetic audit verify`)
+
+The audit trail is also **tamper-evident**. Every new entry is signed with an
+[Ed25519](https://ed25519.cr.yp.to/) key and linked to the entry before it by a
+SHA-256 **hash chain**, so the log is independently verifiable without trusting
+the machine that wrote it — the evidence SOC 2 (CC7/CC8) and the EU **DORA**
+operational-resilience regime expect from an automation system's activity log.
+
+Each signed entry carries four extra fields:
+
+```jsonl
+{"timestamp":"2026-06-06T02:00:11.482+00:00","action":"commit","status":"success", ...,
+ "prev_hash":"9f2c…","signature":"base64…","public_key":"base64…","signed_at":"2026-06-06T02:00:11.500+00:00"}
+```
+
+- **`signature`** — Ed25519 signature over the entry's canonical content. Any edit
+  to a recorded field invalidates it.
+- **`public_key`** — the raw public key, so anyone can verify without the secret.
+- **`prev_hash`** — SHA-256 of the previous signed entry; re-ordering, inserting,
+  or deleting a line breaks the chain.
+- **`signed_at`** — when the signature was applied (UTC).
+
+```bash
+eidetic audit keygen                     # generate the Ed25519 signing keypair
+eidetic audit verify                     # check every signature + the hash chain
+eidetic audit sign                       # retroactively sign older unsigned entries
+eidetic audit export --format json -o audit-signed.json   # signed trail for review
+```
+
+`eidetic audit verify` reports how many entries are verified, unsigned, or
+tampered (with the first offending line), and exits non-zero if the chain is
+broken. New entries are signed automatically on write; `eidetic audit sign`
+back-fills any pre-existing entries.
+
+- **Key location:** `$EIDETIC_AUDIT_KEY` if set, otherwise `audit_key` beside the
+  trail (`…/.eidetic/audit_key`), with the public half at `audit_key.pub`. The
+  private key is written owner-only (`0600`) in PEM/PKCS8 form.
+- **Graceful fallback:** if the `cryptography` library is unavailable, entries are
+  written **unsigned** with a one-time warning rather than failing the action.
+
+---
+
+## Verification gates (`eidetic verify`)
+
+Before Eidetic runs autonomous code or deploys a freshly-written skill, it can
+put the change through a fixed, ordered **verification pipeline** — a GROUND-style
+gate inspired by [Nucleus MCP's GROUND system](https://github.com/). Each tier
+answers one narrow question, and the pipeline **stops at the first blocking
+failure**, so a syntax error is never followed by a pointless attempt to run the
+file.
+
+| # | Tier | What it checks | Blocking? |
+|---|---|---|---|
+| 1 | **syntax** | Every `.py` file parses with `ast.parse()` | ✅ unparseable code halts the pipeline |
+| 2 | **imports** | No `BLOCK`-level patterns (`eval`, `os.system`, `shell=True`, …) via the [static security scanner](#security--privacy); all third-party imports resolve | ✅ dangerous code or missing deps halt |
+| 3 | **tests** | Discovers `test_*.py` for the target and runs them under `pytest`, reporting pass/fail/skip | ❌ failures reported, pipeline continues |
+| 4 | **runtime** | Executes the entry point in the [resource-limited sandbox](#scheduled-tasks--the-skills-catalog) (timeout / memory / CPU caps, no network) | ✅ a non-zero exit or timeout halts |
+| 5 | **diff** | In a git repo, lists working-tree changes and flags any outside the target's own path | ❌ informational, never halts |
+
+```bash
+eidetic verify path/to/skill            # run all five gates
+eidetic verify foo.py --tier syntax,imports   # a subset, in canonical order
+eidetic verify foo.py --json            # machine-readable report (for CI / audit)
+eidetic verify skill/ --timeout 10 --memory-mb 128   # tighten the sandbox budget
+```
+
+Example output:
+
+```
+Verification of demo_skill — PASS (412 ms)
+
+  ✓ syntax    3 file(s) parsed cleanly  (2 ms)
+  ✓ imports   imports resolve, no dangerous patterns (3 file(s) scanned)  (9 ms)
+  ✓ tests     2 passed, 0 failed, 0 skipped, 0 error(s)  (administered by pytest)  (301 ms)
+  ✓ runtime   clean exit (code 0) in 0.08s  (94 ms)
+  ✓ diff      1 changed file(s), all within scope  (6 ms)
+```
+
+The command **exits non-zero** when the report fails, so it drops straight into
+CI or a pre-execution hook. Every run appends a `verify` entry to the
+[audit trail](#audit-trail), giving you a record of what was gated and why.
+Under the hood it reuses the same primitives as the skill-install gate: the
+static AST scanner ([`security.py`](eidetic_os/security.py)) backs the imports
+tier and the sandbox ([`sandbox.py`](eidetic_os/sandbox.py)) backs the runtime
+tier — defence in depth, now available as a standalone gate.
 
 ---
 

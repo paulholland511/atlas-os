@@ -4,6 +4,77 @@ All notable changes to Eidetic OS are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v5.0.0
+
+### Added
+- **Structured verification gates** ([#29](https://github.com/paulholland511/eidetic-os/issues/29)) —
+  a new [`eidetic_os/verify.py`](eidetic_os/verify.py) module implementing a
+  GROUND-style (Nucleus MCP-inspired) **5-tier verification pipeline** that vets
+  code or a skill *before* it is run autonomously or deployed. The gates run in a
+  fixed order and the pipeline **stops at the first blocking failure**:
+  - **syntax** — every `.py` file is parsed with `ast.parse()`; an unparseable
+    file is a *blocking* failure (it hides its behaviour from every later gate).
+  - **imports** — runs the existing static security scanner
+    ([`eidetic_os/security.py`](eidetic_os/security.py)) and *blocks* on any
+    `BLOCK`-level pattern (`eval`, `os.system`, `subprocess(..., shell=True)`, …);
+    separately resolves every third-party top-level import with
+    `importlib.util.find_spec` and *blocks* on missing dependencies, while
+    ignoring sibling/local modules.
+  - **tests** — discovers `test_*.py` / `*_test.py` for the target and runs them
+    under `pytest`, reporting pass/fail/skip/error counts. Test failures are
+    surfaced but **non-blocking** so the remaining gates still run.
+  - **runtime** — executes the target's entry point in the existing
+    resource-limited sandbox ([`eidetic_os/sandbox.py`](eidetic_os/sandbox.py))
+    under wall-clock / memory / CPU caps with network denied by default; a
+    non-zero exit or a timeout is a *blocking* failure.
+  - **diff** — in a git repository, lists working-tree changes and flags any that
+    fall outside the target's own path (informational, never blocking).
+  - Each gate returns a `TierResult(tier, passed, details, duration_ms, blocking,
+    data)`; the run is summarised in a `VerificationReport` with overall
+    `passed`, `blocked_at`, `total_duration_ms`, `timestamp`, and `to_json()` for
+    the audit trail. A crashing gate fails closed (blocking) rather than
+    propagating.
+  - New CLI command: `eidetic verify <path>` (run all gates), with
+    `--tier syntax,imports` to run a subset, `--json` for a machine-readable
+    report, and `--timeout` / `--memory-mb` / `--allow-network` to tune the
+    runtime sandbox. The command exits non-zero on failure (CI/pre-execution
+    gate) and appends a `verify` entry to the [audit trail](README.md#audit-trail).
+  - Full test coverage in [`tests/test_verify.py`](tests/test_verify.py) — each
+    tier in isolation, the full pipeline, blocking/short-circuit behaviour, JSON
+    output, audit logging, and the CLI surface.
+- **Cryptographic audit signatures (Ed25519 + hash chain)** ([#30](https://github.com/paulholland511/eidetic-os/issues/30)) —
+  a new [`eidetic_os/audit_crypto.py`](eidetic_os/audit_crypto.py) module that makes
+  the append-only [audit trail](README.md#audit-trail) **tamper-evident and
+  independently verifiable**, the evidence SOC 2 (CC7/CC8) and the EU **DORA**
+  regime expect from an automation system's activity log. Highlights:
+  - `AuditSigner` loads or generates an **Ed25519** keypair (private key written
+    PEM/PKCS8, owner-only `0600`; public key alongside as `.pub`). `sign_entry`
+    adds a base64 `signature` over the entry's **canonical JSON**, the raw
+    `public_key`, a `signed_at` timestamp, and a `prev_hash` chain link.
+  - **Hash chain of custody** — each entry embeds the SHA-256 of the previous
+    signed entry, so re-ordering, inserting, or deleting a line breaks the chain
+    even if every individual signature is valid.
+  - `verify_entry` checks a single signature against its embedded public key;
+    `verify_trail` walks a whole JSONL file and returns a `VerificationResult`
+    (`total_entries`, `verified`, `unsigned`, `tampered`, `first_tampered_line`,
+    `chain_intact`), reporting the first offending line.
+  - **Automatic signing on write** — [`eidetic_os/audit.py`](eidetic_os/audit.py)'s
+    `log_action` now signs each new entry under its existing write lock, chaining
+    onto the trail's tail. If the `cryptography` library is unavailable, entries
+    are written **unsigned** with a one-time warning rather than failing the
+    recorded action (graceful degradation).
+  - New CLI commands: `eidetic audit keygen` (generate the signing key),
+    `eidetic audit verify` (check every signature + the hash chain, exit non-zero
+    on a broken chain), and `eidetic audit sign` (retroactively sign older
+    unsigned entries). `eidetic audit export --format json` emits the full signed
+    trail for compliance review.
+  - Adds `cryptography>=42.0` to the core dependencies.
+  - Full test coverage in [`tests/test_audit_crypto.py`](tests/test_audit_crypto.py) —
+    keypair generation, sign/verify round-trip, content tamper detection, hash-chain
+    integrity (re-order / insert / delete), unsigned-entry detection, retroactive
+    signing, the live `log_action` path, the CLI surface, and graceful fallback
+    when `cryptography` is absent.
+
 ## [4.0.0] — 2026-06-06
 
 **v4.0.0** — the rebrand-and-remember release. The **[v4.0.0 milestone](https://github.com/paulholland511/eidetic-os/milestone/4)**

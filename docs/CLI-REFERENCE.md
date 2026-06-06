@@ -109,6 +109,7 @@ eidetic-os 0.3.0
 | [`eidetic audit`](#eidetic-audit) | Inspect the append-only audit trail. |
 | [`eidetic security`](#eidetic-security) | Scan skills for dangerous code; review the install security audit. |
 | [`eidetic dashboard`](#eidetic-dashboard) | Launch the local web dashboard *(needs the `dashboard` extra)*. |
+| [`eidetic serve`](#eidetic-serve) | Start the Obsidian-plugin REST API *(needs the `dashboard` extra)*. |
 | [`eidetic schemas`](#eidetic-schemas) | Enforce per-folder frontmatter schemas. |
 | [`eidetic session`](#eidetic-session) | Save Cowork chat transcripts to the vault. |
 | [`eidetic extensions`](#eidetic-extensions) | List and inspect the optional extensions plugged into Eidetic OS. |
@@ -955,6 +956,49 @@ eidetic dashboard [--host HOST] [--port PORT] [--open/--no-open] [--debug]
 skill-pack install buttons (which write only into your scheduled-tasks
 directory). Never expose it on a public interface with vault data behind it. See
 [`features/dashboard.md`](features/dashboard.md).
+
+---
+
+### `eidetic serve`
+
+Start the **plugin API server** the native Obsidian plugin
+([`obsidian-plugin/`](../obsidian-plugin/README.md)) talks to — a minimal,
+CORS-enabled, localhost-only Flask REST layer over the same RAG/facts data the CLI
+and dashboard expose. Implemented in
+[`eidetic_os/plugin_server.py`](../eidetic_os/plugin_server.py).
+
+Needs the optional dashboard extra (Flask):
+
+```bash
+pip install 'eidetic-os[dashboard]'
+eidetic serve                       # http://localhost:8501/api
+```
+
+```bash
+eidetic serve [--host HOST] [--port PORT] [--debug]
+```
+
+**Endpoints** (all JSON):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Liveness + version |
+| `GET` | `/api/search?q=&limit=&mode=` | RAG search (hybrid / vector / keyword) |
+| `GET` | `/api/facts?category=&limit=` | List stored facts |
+| `GET` | `/api/facts/search?q=&limit=` | Semantic fact search |
+| `GET` | `/api/stats` | Vault / vector / fact stats |
+| `POST` | `/api/facts/extract` | Extract (and optionally store) facts from text |
+
+**Flags**
+
+| Flag | Argument | Description |
+|---|---|---|
+| `--host` | `HOST` | Interface to bind. Default `127.0.0.1` (localhost only) — keep it there. |
+| `--port`, `-p` | `PORT` | Port to serve on. Default `8501`. |
+| `--debug` | — | Flask debug mode: auto-reload and in-browser tracebacks. |
+
+**Privacy.** Like the dashboard, it reads from your machine only and is meant for
+localhost. Never expose it on a public interface with vault data behind it.
 
 ---
 

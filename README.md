@@ -44,6 +44,7 @@ Everything below is **in the box today** — not roadmap, not "coming soon":
 - 🧠 **Mem0-style fact memory** (`eidetic facts`) — distil discrete facts from conversations and deduplicate against existing memory (insert / bump / supersede / merge), with LLM extraction and a heuristic offline fallback
 - 🔌 **Local LLM backends** — auto-detects Ollama, LM Studio, llama.cpp, or any OpenAI-compatible endpoint; nothing leaves your machine
 - 📊 **Web dashboard** (`eidetic dashboard`) — seven live panels: health, audit, tasks, skills, knowledge graph, vectors, RAG search
+- 🧩 **Native Obsidian plugin** (`eidetic serve`) — search memory, browse facts, and extract facts from a note inside Obsidian, via a local CORS API
 - 🕸️ **Visual knowledge graph** — interactive D3 view of how your notes connect (`eidetic graph --open`)
 - 🧙 **Interactive setup wizard** (`eidetic init`) — zero to running in 5 minutes
 - 📋 **Audit trail** — append-only JSONL logging every autonomous action (ISO 27001 aligned)
@@ -1056,6 +1057,42 @@ optional local JSON endpoints you can back with a ~30-line shim:
 For a richer multi-panel app, build it as a **separate repo** pointed at the same
 local endpoints — keep its dependencies and any cached data out of this public
 repo. Details: [`dashboard/README.md`](dashboard/README.md).
+
+---
+
+## Obsidian plugin (optional)
+
+You manage your vault in Obsidian — so search your memory, browse facts, and
+extract facts from a note **without leaving it**. A lightweight native plugin
+([`obsidian-plugin/`](obsidian-plugin/)) talks to a small local API server that
+exposes the same RAG/facts functionality the CLI and dashboard use.
+
+```bash
+pip install 'eidetic-os[dashboard]'   # provides Flask
+eidetic serve                          # plugin API → http://localhost:8501/api
+```
+
+`eidetic serve` runs a minimal, CORS-enabled, **localhost-only** REST layer:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Liveness + version |
+| `GET` | `/api/search?q=&limit=&mode=` | RAG search (hybrid / vector / keyword) |
+| `GET` | `/api/facts?category=&limit=` | List stored facts |
+| `GET` | `/api/facts/search?q=&limit=` | Semantic fact search |
+| `GET` | `/api/stats` | Vault / vector / fact stats |
+| `POST` | `/api/facts/extract` | Extract (and optionally store) facts from text |
+
+The plugin adds four commands — **Eidetic: Search memory**, **Show facts**,
+**Extract facts from note**, **System stats** — plus a brain ribbon icon, a
+connection/fact-count status bar, and a settings tab for the server URL. Build it
+with `npm install && npm run build` in `obsidian-plugin/`, then copy
+`manifest.json`, `main.js`, and `styles.css` into
+`<vault>/.obsidian/plugins/eidetic-os/` and enable it. Full setup:
+[`obsidian-plugin/README.md`](obsidian-plugin/README.md).
+
+It reads from your machine only — bind it to localhost and never expose it
+publicly with vault data behind it.
 
 ---
 

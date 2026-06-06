@@ -69,6 +69,29 @@ issues [#22](https://github.com/paulholland511/atlas-os/issues/22)–[#27](https
   - Full test coverage in [`tests/test_sleeptime.py`](tests/test_sleeptime.py) —
     noise stripping, all extractors, contradiction detection, watermark tracking,
     end-to-end passes, status, and the daemon lifecycle.
+- **Native Obsidian plugin + API server** ([#24](https://github.com/paulholland511/atlas-os/issues/24)) —
+  search memory, browse facts, and extract facts from a note **without leaving
+  Obsidian**, backed by a small local REST server over the existing RAG/facts
+  modules. Highlights:
+  - New [`eidetic_os/plugin_server.py`](eidetic_os/plugin_server.py) — a minimal,
+    CORS-enabled, **localhost-only** Flask app exposing `GET /api/health`,
+    `GET /api/search` (hybrid/vector/keyword, reusing the dashboard's search
+    layer), `GET /api/facts` and `GET /api/facts/search`, `GET /api/stats`
+    (vault/vector/fact counts + last-embed time), and `POST /api/facts/extract`
+    (preview or store, deduplicated). It is a *view* over the same modules the CLI
+    and dashboard use — never a second source of truth.
+  - New CLI command: `eidetic serve` (`--host`, `--port`, `--debug`) — starts the
+    plugin API (default `http://localhost:8501`); needs the `dashboard` extra.
+  - New [`obsidian-plugin/`](obsidian-plugin/) — a TypeScript Obsidian plugin
+    (manifest, esbuild config, styles) adding four command-palette actions
+    (**Search memory**, **Show facts**, **Extract facts from note**,
+    **System stats**), a brain ribbon icon, a connection/fact-count status bar, and
+    a settings tab for the server URL. Ships as source with a build config; not
+    compiled in CI.
+  - Full test coverage in [`tests/test_plugin_server.py`](tests/test_plugin_server.py) —
+    every endpoint's JSON shape, offline keyword search, fact listing/filtering/
+    search, extraction (preview + store), stats (with and without an index), and
+    the CORS headers.
 
 ### Changed
 - **Rebranded from Atlas OS to Eidetic OS.** The project's first three major
@@ -97,7 +120,6 @@ issues [#22](https://github.com/paulholland511/atlas-os/issues/22)–[#27](https
 ### Roadmap (v4.0.0)
 - Mem0-style fact extraction with dedup against existing memory ([#22](https://github.com/paulholland511/atlas-os/issues/22)).
 - Sleeptime memory-consolidation daemon ([#23](https://github.com/paulholland511/atlas-os/issues/23)).
-- Native Obsidian plugin for search / management / memory visualisation ([#24](https://github.com/paulholland511/atlas-os/issues/24)).
 - Interactive setup wizard 2.0 — model detection, endpoint mapping, style profiling ([#25](https://github.com/paulholland511/atlas-os/issues/25)).
 - Channel adapters for Slack / Telegram ([#26](https://github.com/paulholland511/atlas-os/issues/26)).
 - Memory decay & time-weighted relevance scoring ([#27](https://github.com/paulholland511/atlas-os/issues/27)).

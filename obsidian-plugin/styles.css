@@ -1,0 +1,196 @@
+/*
+ * Eidetic OS — Obsidian plugin styles.
+ *
+ * Uses Obsidian's CSS variables (var(--…)) throughout so the plugin inherits the
+ * user's theme (light/dark, accent colour) instead of hard-coding colours.
+ */
+
+/* ── Search modal ─────────────────────────────────────────────────────────── */
+.eidetic-search-modal {
+  min-width: 480px;
+}
+
+.eidetic-search-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.eidetic-search-input {
+  flex: 1;
+}
+
+.eidetic-mode-select {
+  flex: 0 0 auto;
+}
+
+.eidetic-search-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: 8px;
+  min-height: 1em;
+}
+
+.eidetic-search-results {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.eidetic-result-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.eidetic-result-card:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.eidetic-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.eidetic-result-file {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  word-break: break-all;
+}
+
+.eidetic-result-score {
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.eidetic-result-heading {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.eidetic-result-snippet {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ── Facts view (sidebar) ─────────────────────────────────────────────────── */
+.eidetic-facts-view {
+  padding: 8px 10px;
+}
+
+.eidetic-facts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eidetic-facts-header h4 {
+  margin: 0;
+}
+
+.eidetic-btn {
+  cursor: pointer;
+}
+
+.eidetic-facts-search {
+  margin: 8px 0;
+}
+
+.eidetic-facts-search input {
+  width: 100%;
+}
+
+.eidetic-fact-card {
+  border-left: 3px solid var(--interactive-accent);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-s);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.eidetic-fact-text {
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  line-height: 1.4;
+}
+
+.eidetic-fact-meta {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: var(--font-ui-smaller);
+}
+
+.eidetic-tag {
+  border-radius: var(--radius-s);
+  padding: 0 6px;
+  background-color: var(--background-modifier-border);
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+/* Category accents — fall back to the muted tag for unknown categories. */
+.eidetic-cat-preference { background-color: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+.eidetic-cat-decision { background-color: rgba(52, 211, 153, 0.2); color: #34d399; }
+.eidetic-cat-technical { background-color: rgba(167, 139, 250, 0.2); color: #a78bfa; }
+.eidetic-cat-person { background-color: rgba(244, 114, 182, 0.2); color: #f472b6; }
+.eidetic-cat-project { background-color: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+
+.eidetic-muted {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+/* ── Stats modal ──────────────────────────────────────────────────────────── */
+.eidetic-stats-modal h4 {
+  margin: 14px 0 4px;
+  color: var(--text-accent);
+}
+
+.eidetic-stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--background-modifier-border);
+}
+
+.eidetic-stat-label {
+  color: var(--text-muted);
+}
+
+.eidetic-stat-value {
+  color: var(--text-normal);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Status bar ───────────────────────────────────────────────────────────── */
+.eidetic-status {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.eidetic-status-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.eidetic-status.eidetic-connected {
+  color: var(--text-success, var(--text-accent));
+}
+
+.eidetic-status.eidetic-disconnected {
+  color: var(--text-error, var(--text-muted));
+}

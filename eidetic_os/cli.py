@@ -19,6 +19,7 @@ Subcommands:
 * ``eidetic consolidate``— sleeptime memory consolidation of recent session logs
 * ``eidetic audit``    — inspect the append-only audit trail (show | tail | export)
 * ``eidetic dashboard``— launch the local web dashboard (needs the dashboard extra)
+* ``eidetic serve``    — start the Obsidian-plugin REST API (needs the dashboard extra)
 * ``eidetic extensions``— list/inspect optional extensions (trading, voice, jobs)
 * ``eidetic mcp``      — run Eidetic OS as an MCP server; ``list-tools`` to inspect.
                        ``eidetic skills run <name>`` serves one skill over MCP.
@@ -2548,6 +2549,54 @@ def dashboard(
     Needs the optional dashboard extra: ``pip install 'eidetic-os[dashboard]'``.
     """
     _serve_dashboard(host, port, open_browser=open_browser, debug=debug)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# serve — the lightweight REST API the Obsidian plugin talks to
+# ─────────────────────────────────────────────────────────────────────────────
+@app.command()
+def serve(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Interface to bind (default localhost only)."
+    ),
+    port: int = typer.Option(8501, "--port", "-p", help="Port to serve on."),
+    debug: bool = typer.Option(
+        False, "--debug", help="Run Flask in debug mode (auto-reload, tracebacks)."
+    ),
+) -> None:
+    """Start the plugin API server for the Obsidian plugin (and any local client).
+
+    A minimal, local-first Flask REST layer over the same data ``eidetic`` already
+    exposes — RAG search, the fact store, vector-store stats, and fact extraction —
+    under ``/api/*`` with CORS enabled for localhost. The companion Obsidian plugin
+    (``obsidian-plugin/``) points at this server (default
+    ``http://localhost:8501``) to search memory, browse facts, and extract facts
+    from a note without leaving Obsidian.
+
+    It reads from your machine only; bind it to localhost and never expose it
+    publicly with vault data behind it.
+
+    Needs the optional dashboard extra: ``pip install 'eidetic-os[dashboard]'``.
+    """
+    try:
+        from eidetic_os.plugin_server import create_plugin_app
+    except ModuleNotFoundError as exc:  # pragma: no cover - exercised via import path
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    try:
+        flask_app = create_plugin_app()
+    except ModuleNotFoundError as exc:
+        _echo_fail(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    base = f"http://{host}:{port}"
+    typer.secho(
+        f"\n  ⛰  Eidetic OS plugin API → {base}/api", fg=typer.colors.CYAN, bold=True
+    )
+    typer.echo("  Point the Obsidian plugin's server URL here.")
+    typer.echo("  Local-first. Press Ctrl+C to stop.\n")
+    flask_app.run(host=host, port=port, debug=debug)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

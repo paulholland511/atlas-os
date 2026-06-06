@@ -64,6 +64,11 @@ CATEGORIES: Final = (
 )
 _DEFAULT_CATEGORY: Final = "other"
 
+# The memory tier a fact lives in (Feature #31). New facts land in the warm
+# "recall" cache; the tiered-memory manager (:mod:`eidetic_os.memory_tiers`)
+# promotes the hottest to "core" and demotes the coldest to "archival".
+_DEFAULT_TIER: Final = "recall"
+
 # Similarity at/above which two facts are "about the same thing" and dedup kicks
 # in. Below it they are treated as independent and both kept.
 DEFAULT_DEDUP_THRESHOLD: Final = 0.85
@@ -168,6 +173,9 @@ class StoredFact:
     # Time-weighted relevance (Feature #27), recomputed by the memory scorer.
     # Defaults to 1.0 for a freshly inserted fact (fully relevant, never decayed).
     relevance_score: float = 1.0
+    # Memory tier (Feature #31): one of ``core`` / ``recall`` / ``archival``.
+    # A fresh fact starts in the warm ``recall`` cache.
+    tier: str = _DEFAULT_TIER
 
 
 # ── LLM extraction ────────────────────────────────────────────────────────────
@@ -520,7 +528,8 @@ class FactStore:
                 category        TEXT NOT NULL DEFAULT 'other',
                 embedding       BLOB,
                 active          INTEGER NOT NULL DEFAULT 1,
-                relevance_score REAL NOT NULL DEFAULT 1.0
+                relevance_score REAL NOT NULL DEFAULT 1.0,
+                tier            TEXT NOT NULL DEFAULT 'recall'
             );
             CREATE INDEX IF NOT EXISTS idx_facts_active ON facts(active);
             CREATE INDEX IF NOT EXISTS idx_facts_category ON facts(category);
@@ -545,6 +554,15 @@ class FactStore:
             self._conn.execute(
                 "ALTER TABLE facts ADD COLUMN relevance_score REAL NOT NULL DEFAULT 1.0"
             )
+        if "tier" not in existing:  # Feature #31
+            self._conn.execute(
+                "ALTER TABLE facts ADD COLUMN tier TEXT NOT NULL DEFAULT 'recall'"
+            )
+        # Created here (not in the schema script) so it also covers a legacy table
+        # that gained the column via the ALTER above — the column must exist first.
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_facts_tier ON facts(tier)"
+        )
 
     # ── embedding helper ──────────────────────────────────────────────────────
     def _embed_one(self, text: str) -> list[float] | None:
@@ -734,6 +752,7 @@ class FactStore:
             category=row["category"],
             active=bool(row["active"]),
             relevance_score=float(row["relevance_score"]),
+            tier=(row["tier"] or _DEFAULT_TIER),
         )
 
     def count(self, *, active_only: bool = True) -> int:
@@ -777,17 +796,24 @@ class FactStore:
         *,
         limit: int = 10,
         record_access: bool = True,
+        tier: str | None = None,
     ) -> list[tuple[StoredFact, float]]:
         """Semantic search over active facts. Returns ``(fact, score)`` best-first.
 
         Scores are cosine similarity when an embedder is configured, else token
         overlap. Returned facts are ``touch``-ed (access recorded) unless
-        ``record_access`` is false — searching for a fact is using it.
+        ``record_access`` is false — searching for a fact is using it. Pass
+        ``tier`` to restrict the search to a single memory tier (Feature #31).
         """
         query_embedding = self._embed_one(query)
-        rows = self._conn.execute(
-            "SELECT * FROM facts WHERE active = 1"
-        ).fetchall()
+        if tier is None:
+            rows = self._conn.execute(
+                "SELECT * FROM facts WHERE active = 1"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM facts WHERE active = 1 AND tier = ?", (tier,)
+            ).fetchall()
         scored: list[tuple[StoredFact, float]] = []
         for row in rows:
             if query_embedding is not None and row["embedding"] is not None:
@@ -853,6 +879,39 @@ class FactStore:
                 (score, fact_id),
             )
         self._conn.commit()
+
+    # ── tiered-memory support (Feature #31) ────────────────────────────────────
+    def set_tier(self, fact_id: int, tier: str) -> None:
+        """Move a fact into ``tier`` (``core`` / ``recall`` / ``archival``)."""
+        self._conn.execute(
+            "UPDATE facts SET tier = ? WHERE id = ?", (tier, fact_id)
+        )
+        self._conn.commit()
+
+    def facts_in_tier(
+        self, tier: str, *, limit: int | None = None
+    ) -> list[StoredFact]:
+        """Active facts in ``tier``, most relevant first (then newest)."""
+        sql = (
+            "SELECT * FROM facts WHERE active = 1 AND tier = ? "
+            "ORDER BY relevance_score DESC, id DESC"
+        )
+        params: list[Any] = [tier]
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        rows = self._conn.execute(sql, params).fetchall()
+        return [self._row_to_fact(r) for r in rows]
+
+    def tier_counts(self) -> dict[str, int]:
+        """Number of active facts per tier, keyed by tier name."""
+        return {
+            str(row["tier"]): int(row["n"])
+            for row in self._conn.execute(
+                "SELECT tier, COUNT(*) AS n FROM facts WHERE active = 1 "
+                "GROUP BY tier"
+            )
+        }
 
     def active_facts(self) -> list[StoredFact]:
         """Every active fact, oldest first — the input to a scoring pass."""
@@ -955,6 +1014,7 @@ class FactStore:
             "active": active,
             "superseded": total - active,
             "by_category": per_category,
+            "by_tier": self.tier_counts(),
             "by_source": sources,
             "avg_confidence": avg_conf,
             "has_embeddings": self.embed_fn is not None,

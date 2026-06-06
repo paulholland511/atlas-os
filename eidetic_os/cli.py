@@ -2207,6 +2207,115 @@ def memory_stale(
         typer.echo(_fmt_scored_fact(fact))
 
 
+# ── tiered memory — Core / Recall / Archival (Feature #31) ────────────────────
+_TIER_COLOURS = {
+    "core": typer.colors.RED,
+    "recall": typer.colors.YELLOW,
+    "archival": typer.colors.BLUE,
+}
+
+
+@memory_app.command("tiers")
+def memory_tiers(
+    as_json: bool = typer.Option(False, "--json", help="Emit the distribution as JSON."),
+) -> None:
+    """Show the current tier distribution (Core / Recall / Archival).
+
+    Core is the hot working set always injected into context; Recall is the warm
+    on-demand cache; Archival is unbounded cold storage. Tiers are assigned from
+    each fact's relevance score and rebalanced by `eidetic memory compact`.
+    """
+    from eidetic_os.memory_tiers import TieredMemory
+
+    with facts_engine.open_store(with_embedder=False) as store:
+        view = TieredMemory(store=store).as_dict()
+
+    if as_json:
+        typer.echo(json.dumps(view, indent=2))
+        return
+    typer.secho("\nMemory tiers\n", bold=True)
+    if not view["total"]:
+        _echo_warn("no facts stored yet — run `eidetic facts extract <file>`")
+        return
+    for tier in ("core", "recall", "archival"):
+        count = view["counts"].get(tier, 0)
+        size = view["sizes"].get(tier, 0)
+        limit = view["limits"].get(tier)
+        cap = f"/{limit}" if limit is not None else ""
+        label = typer.style(f"{tier:<9}", fg=_TIER_COLOURS.get(tier, typer.colors.WHITE))
+        typer.echo(f"  {label} {count:>5}{cap:<6} facts   {size:>7} chars")
+    typer.echo(f"\n  {view['total']} active fact(s) across all tiers.")
+
+
+@memory_app.command("compact")
+def memory_compact(
+    as_json: bool = typer.Option(False, "--json", help="Emit the compaction summary as JSON."),
+) -> None:
+    """Rebalance tiers: re-tier by relevance, then enforce the size limits.
+
+    Re-tiers every active fact from its current relevance score, then demotes the
+    coldest overflow (Core → Recall → Archival) so the hot set stays small. This
+    also runs automatically on every sleeptime consolidation pass.
+    """
+    from eidetic_os.memory_tiers import TieredMemory
+
+    with facts_engine.open_store(with_embedder=False) as store:
+        result = TieredMemory(store=store).compact()
+
+    if as_json:
+        typer.echo(json.dumps({
+            "retiered": result.retiered,
+            "demoted_core": result.demoted_core,
+            "demoted_recall": result.demoted_recall,
+            "counts": result.stats.counts,
+        }, indent=2))
+        return
+    typer.secho("\nTier compaction\n", bold=True)
+    _echo_ok(f"{result.retiered} fact(s) re-tiered by relevance")
+    demoted = result.demoted_core + result.demoted_recall
+    if demoted:
+        _echo_warn(
+            f"{demoted} fact(s) demoted to honour limits "
+            f"(core→recall {result.demoted_core}, recall→archival {result.demoted_recall})"
+        )
+    counts = result.stats.counts
+    typer.echo(
+        f"      core={counts.get('core', 0)} "
+        f"recall={counts.get('recall', 0)} "
+        f"archival={counts.get('archival', 0)}"
+    )
+
+
+@memory_app.command("promote")
+def memory_promote(
+    fact_id: int = typer.Argument(..., help="ID of the fact to promote (archival→recall→core)."),
+) -> None:
+    """Manually move a fact one tier hotter (archival → recall → core)."""
+    from eidetic_os.memory_tiers import TieredMemory
+
+    with facts_engine.open_store(with_embedder=False) as store:
+        new_tier = TieredMemory(store=store).promote(fact_id)
+    if new_tier is None:
+        _echo_fail(f"no active fact with id {fact_id}")
+        raise typer.Exit(code=1)
+    _echo_ok(f"fact {fact_id} now in tier '{new_tier.value}'")
+
+
+@memory_app.command("demote")
+def memory_demote(
+    fact_id: int = typer.Argument(..., help="ID of the fact to demote (core→recall→archival)."),
+) -> None:
+    """Manually move a fact one tier colder (core → recall → archival)."""
+    from eidetic_os.memory_tiers import TieredMemory
+
+    with facts_engine.open_store(with_embedder=False) as store:
+        new_tier = TieredMemory(store=store).demote(fact_id)
+    if new_tier is None:
+        _echo_fail(f"no active fact with id {fact_id}")
+        raise typer.Exit(code=1)
+    _echo_ok(f"fact {fact_id} now in tier '{new_tier.value}'")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # channels — Slack / Telegram / webhook adapters (Feature #26)
 # ─────────────────────────────────────────────────────────────────────────────

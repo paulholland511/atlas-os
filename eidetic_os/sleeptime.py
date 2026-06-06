@@ -702,10 +702,59 @@ class ConsolidationDaemon:
                 context=f"decay {db_path}",
             )
 
+    def _compact_tiers(self) -> None:
+        """Rebalance the tiered-memory hierarchy each pass (#31).
+
+        Best-effort and fully optional, mirroring :meth:`_decay_facts`: opens the
+        conventional fact store at this vault, runs a
+        :meth:`~eidetic_os.memory_tiers.TieredMemory.compact` pass (re-tier by the
+        freshly decayed relevance scores, then enforce the Core/Recall size
+        limits), and records the outcome in the audit trail. Any failure — the
+        module absent, the store missing, a bad config — is swallowed so a tiering
+        hiccup can never derail a consolidation run.
+        """
+        try:
+            from eidetic_os.facts import FactStore
+            from eidetic_os.memory_tiers import TieredMemory
+        except Exception:  # noqa: BLE001 - tiers module not present → skip silently
+            return
+        db_path = self.vault_path / ".eidetic" / "facts.db"
+        if not db_path.exists():
+            return
+        try:
+            store = FactStore(db_path)
+        except Exception:  # noqa: BLE001 - unreadable store → skip
+            return
+        try:
+            result = TieredMemory(store=store).compact()
+        except Exception as exc:  # noqa: BLE001 - a bad pass must not break consolidation
+            audit.log_action(
+                "memory-compact", os.environ.get("EIDETIC_TRIGGER", "scheduled"),
+                "error", context=f"compact {db_path}",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            return
+        finally:
+            store.close()
+        counts = result.stats.counts
+        audit.log_action(
+            "memory-compact", os.environ.get("EIDETIC_TRIGGER", "scheduled"),
+            "success",
+            changes=[
+                f"{result.retiered} re-tiered",
+                f"{result.demoted_core + result.demoted_recall} demoted (limits)",
+                f"core={counts.get('core', 0)} recall={counts.get('recall', 0)} "
+                f"archival={counts.get('archival', 0)}",
+            ],
+            context=f"compact {db_path}",
+        )
+
     def _run_locked(self, trigger: str) -> ConsolidatedNote | None:
         started = self._now()
         # Refresh fact relevance every pass, independent of new session content.
         self._decay_facts()
+        # Then rebalance the memory tiers against those fresh relevance scores.
+        self._compact_tiers()
         sessions = self.scan_recent_sessions()
         if not sessions:
             # Still advance the watermark so an empty pass isn't repeated forever.

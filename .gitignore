@@ -74,3 +74,7 @@ Thumbs.db
 
 # ── Local Claude Code / agent tooling state (not part of the public repo) ────
 .claude/
+
+# ── Eidetic OS runtime state (created on first run; never part of the repo) ──
+.eidetic/
+.atlas/

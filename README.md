@@ -282,8 +282,12 @@ This project shipped its first three major versions as **Atlas OS**. As of
 Nothing about the architecture changed in the rename — only the brand. The Python
 package is now `eidetic-os`, the CLI command is `eidetic`, and imports are
 `eidetic_os.*`. (The GitHub repository URL stays `paulholland511/atlas-os` until
-the repo is renamed separately.) Upgrading from a 3.x checkout? See
-[`docs/MIGRATION.md`](docs/MIGRATION.md).
+the repo is renamed separately.) Legacy state is migrated for you automatically:
+on first run Eidetic OS copies an existing `.atlas/` directory to `.eidetic/` and
+maps any `ATLAS_*` environment variables to their `EIDETIC_*` equivalents,
+printing a deprecation notice for each. The old PyPI package `atlas-os` still
+installs too — it now just pulls in `eidetic-os` and warns. Upgrading from a 3.x
+checkout? See [`docs/MIGRATION.md`](docs/MIGRATION.md).
 
 ---
 

@@ -11,7 +11,7 @@ For Gmail, generate an app password at
 https://myaccount.google.com/apppasswords (requires 2FA), then export it:
 
     export SMTP_APP_PASSWORD="your-16-char-app-password"
-    export SENDER_EMAIL="your-atlas-account@example.com"
+    export SENDER_EMAIL="your-eidetic-account@example.com"
 
 Environment variables:
     SMTP_APP_PASSWORD   App password / SMTP password   (required)

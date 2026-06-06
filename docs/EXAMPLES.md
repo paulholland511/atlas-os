@@ -43,7 +43,7 @@ App passwords only exist once 2FA is enabled.
 Copy the password **without the spaces** and set these values:
 
 ```bash
-SENDER_EMAIL=your-atlas-account@gmail.com   # the Gmail account sending mail
+SENDER_EMAIL=your-eidetic-account@gmail.com   # the Gmail account sending mail
 SENDER_NAME=Eidetic
 SMTP_SERVER=smtp.gmail.com                   # already the default
 SMTP_PORT=587                                # already the default

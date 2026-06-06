@@ -60,7 +60,7 @@ from eidetic_os import __version__, audit
 from eidetic_os import backends as llm_backends
 from eidetic_os import facts as facts_engine
 from eidetic_os import fileio, frontmatter, git_sync, gitutil
-from eidetic_os import _skills, marketplace, packs, security
+from eidetic_os import _skills, marketplace, migration, packs, security
 from eidetic_os._paths import repo_root, schemas_dir, scripts_dir, templates_dir
 from eidetic_os._probe import Endpoint, detect_endpoints
 from eidetic_os._skills import default_catalog_path, load_skills, render_catalog
@@ -93,6 +93,12 @@ def _echo_warn(msg: str) -> None:
 
 def _echo_fail(msg: str) -> None:
     typer.secho(f"  ✗ {msg}", fg=typer.colors.RED)
+
+
+def _emit_migration(msg: str) -> None:
+    """Migration notices go to stderr so they never corrupt a command's stdout
+    (e.g. ``--json`` output)."""
+    typer.secho(f"  ! {msg}", fg=typer.colors.YELLOW, err=True)
 
 
 _SEVERITY_COLOR: dict[Severity, str] = {
@@ -139,6 +145,9 @@ def _main(
     ),
 ) -> None:
     """Eidetic OS command-line interface."""
+    # Bridge any legacy Atlas OS state (the .atlas/ dir, ATLAS_* env vars) forward
+    # to the Eidetic OS layout. Runs once per invocation; a no-op once migrated.
+    migration.run_migrations(emit=_emit_migration)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -185,69 +185,6 @@ wheels = [
 ]
 
 [[package]]
-name = "eidetic-os"
-source = { editable = "." }
-dependencies = [
-    { name = "python-dotenv" },
-    { name = "pyyaml" },
-    { name = "requests" },
-    { name = "typer" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "chromadb" },
-    { name = "flask" },
-    { name = "lancedb" },
-    { name = "numpy" },
-    { name = "pdfplumber" },
-    { name = "sqlite-vec" },
-    { name = "yfinance" },
-]
-chroma = [
-    { name = "chromadb" },
-]
-dashboard = [
-    { name = "flask" },
-]
-lancedb = [
-    { name = "lancedb" },
-]
-pdf = [
-    { name = "pdfplumber" },
-]
-trading = [
-    { name = "yfinance" },
-]
-vector = [
-    { name = "numpy" },
-    { name = "sqlite-vec" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "chromadb", marker = "extra == 'all'", specifier = ">=0.5" },
-    { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=0.5" },
-    { name = "flask", marker = "extra == 'all'", specifier = ">=3.0" },
-    { name = "flask", marker = "extra == 'dashboard'", specifier = ">=3.0" },
-    { name = "lancedb", marker = "extra == 'all'", specifier = ">=0.5" },
-    { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.5" },
-    { name = "numpy", marker = "extra == 'all'", specifier = ">=1.24" },
-    { name = "numpy", marker = "extra == 'vector'", specifier = ">=1.24" },
-    { name = "pdfplumber", marker = "extra == 'all'", specifier = ">=0.10" },
-    { name = "pdfplumber", marker = "extra == 'pdf'", specifier = ">=0.10" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "requests", specifier = ">=2.28" },
-    { name = "sqlite-vec", marker = "extra == 'all'", specifier = ">=0.1.6" },
-    { name = "sqlite-vec", marker = "extra == 'vector'", specifier = ">=0.1.6" },
-    { name = "typer", specifier = ">=0.12" },
-    { name = "yfinance", marker = "extra == 'all'", specifier = ">=0.2" },
-    { name = "yfinance", marker = "extra == 'trading'", specifier = ">=0.2" },
-]
-provides-extras = ["all", "chroma", "dashboard", "jobs", "lancedb", "pdf", "trading", "vector", "voice"]
-
-[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -705,6 +642,87 @@ sdist = { url = "https://files.pythonhosted.org/packages/9d/a4/e44218c2b394e31a6
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/0d/9feae160378a3553fa9a339b0e9c1a048e147a4127210e286ef18b730f03/durationpy-0.10-py3-none-any.whl", hash = "sha256:3b41e1b601234296b4fb368338fdcd3e13e0b4fb5b67345948f4f2bf9868b286", size = 3922, upload-time = "2025-05-17T13:52:36.463Z" },
 ]
+
+[[package]]
+name = "eidetic-os"
+source = { editable = "." }
+dependencies = [
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "typer" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "chromadb" },
+    { name = "flask" },
+    { name = "lancedb" },
+    { name = "numpy" },
+    { name = "pdfplumber" },
+    { name = "python-telegram-bot" },
+    { name = "slack-sdk" },
+    { name = "sqlite-vec" },
+    { name = "yfinance" },
+]
+channels = [
+    { name = "python-telegram-bot" },
+    { name = "slack-sdk" },
+]
+chroma = [
+    { name = "chromadb" },
+]
+dashboard = [
+    { name = "flask" },
+]
+lancedb = [
+    { name = "lancedb" },
+]
+pdf = [
+    { name = "pdfplumber" },
+]
+slack = [
+    { name = "slack-sdk" },
+]
+telegram = [
+    { name = "python-telegram-bot" },
+]
+trading = [
+    { name = "yfinance" },
+]
+vector = [
+    { name = "numpy" },
+    { name = "sqlite-vec" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "chromadb", marker = "extra == 'all'", specifier = ">=0.5" },
+    { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=0.5" },
+    { name = "flask", marker = "extra == 'all'", specifier = ">=3.0" },
+    { name = "flask", marker = "extra == 'dashboard'", specifier = ">=3.0" },
+    { name = "lancedb", marker = "extra == 'all'", specifier = ">=0.5" },
+    { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.5" },
+    { name = "numpy", marker = "extra == 'all'", specifier = ">=1.24" },
+    { name = "numpy", marker = "extra == 'vector'", specifier = ">=1.24" },
+    { name = "pdfplumber", marker = "extra == 'all'", specifier = ">=0.10" },
+    { name = "pdfplumber", marker = "extra == 'pdf'", specifier = ">=0.10" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "python-telegram-bot", marker = "extra == 'all'", specifier = ">=20.0" },
+    { name = "python-telegram-bot", marker = "extra == 'channels'", specifier = ">=20.0" },
+    { name = "python-telegram-bot", marker = "extra == 'telegram'", specifier = ">=20.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "requests", specifier = ">=2.28" },
+    { name = "slack-sdk", marker = "extra == 'all'", specifier = ">=3.0" },
+    { name = "slack-sdk", marker = "extra == 'channels'", specifier = ">=3.0" },
+    { name = "slack-sdk", marker = "extra == 'slack'", specifier = ">=3.0" },
+    { name = "sqlite-vec", marker = "extra == 'all'", specifier = ">=0.1.6" },
+    { name = "sqlite-vec", marker = "extra == 'vector'", specifier = ">=0.1.6" },
+    { name = "typer", specifier = ">=0.12" },
+    { name = "yfinance", marker = "extra == 'all'", specifier = ">=0.2" },
+    { name = "yfinance", marker = "extra == 'trading'", specifier = ">=0.2" },
+]
+provides-extras = ["all", "channels", "chroma", "dashboard", "jobs", "lancedb", "pdf", "slack", "telegram", "trading", "vector", "voice"]
 
 [[package]]
 name = "filelock"
@@ -2531,6 +2549,19 @@ wheels = [
 ]
 
 [[package]]
+name = "python-telegram-bot"
+version = "22.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpcore", marker = "python_full_version >= '3.14'" },
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/25/2258161b1069e66d6c39c0a602dbe57461d4767dc0012539970ea40bc9d6/python_telegram_bot-22.7.tar.gz", hash = "sha256:784b59ea3852fe4616ad63b4a0264c755637f5d725e87755ecdee28300febf61", size = 1516454, upload-time = "2026-03-16T09:36:03.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/94/f7/0e2f89dd62f45d46d4ea0d8aec5893ce5b37389638db010c117f46f11450/python_telegram_bot-22.7-py3-none-any.whl", hash = "sha256:d72eed532cf763758cd9331b57a6d790aff0bb4d37d8f4e92149436fe21c6475", size = 745365, upload-time = "2026-03-16T09:36:01.498Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2026.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2802,6 +2833,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "slack-sdk"
+version = "3.42.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0e/00/16258bfa547559b2c936b50c882b4f0a36ebf6b69639eb763d8fa5e8d6cb/slack_sdk-3.42.0.tar.gz", hash = "sha256:873db9e1f632ac650ffdbf9d8ba825f3e9e7e576a1e4f9604ccb2a15b3727e3d", size = 252136, upload-time = "2026-05-18T17:50:44.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ce/ef/8a1556bd4843443993fc116783790a7cc553601a37f7d965ec26eef95e76/slack_sdk-3.42.0-py2.py3-none-any.whl", hash = "sha256:eb39aff97e476e10cc5a8ac29bd2e79a9959e880d9fe0c03b4e8f05b2ac996ff", size = 315469, upload-time = "2026-05-18T17:50:41.972Z" },
 ]
 
 [[package]]

@@ -23,7 +23,7 @@ your AI never forgets. (Formerly **Atlas OS** — [why we
 renamed](#why-the-name-atlas-os--eidetic-os).)*
 
 [![CI](https://img.shields.io/github/actions/workflow/status/paulholland511/eidetic-os/ci.yml?branch=main&label=CI)](https://github.com/paulholland511/eidetic-os/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/badge/PyPI-v4.0.0-blue.svg)](https://pypi.org/project/eidetic-os/)
+[![PyPI](https://img.shields.io/pypi/v/eidetic-os)](https://pypi.org/project/eidetic-os/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![GitHub stars](https://img.shields.io/github/stars/paulholland511/eidetic-os?style=flat)](https://github.com/paulholland511/eidetic-os/stargazers)

@@ -41,7 +41,7 @@ def banner(b: Builder) -> None:
     b.reveal(
         L(
             S("  ◆ EIDETIC OS ", PURPLE, bold=True),
-            S("v3.0.0", CYAN, bold=True),
+            S("v4.0.0", CYAN, bold=True),
             S("  ·  ", DIM),
             S("Your AI Never Forgets", BOLD_W),
         )
@@ -54,11 +54,11 @@ def scene_install(b: Builder) -> None:
     b.cmd("pip install eidetic-os")
     b.reveal(L(S("Collecting eidetic-os", FG)))
     b.hold(280)
-    b.bar("Downloading eidetic_os-3.0.0-py3-none-any.whl (62 kB)", 62.0,
+    b.bar("Downloading eidetic_os-4.0.0-py3-none-any.whl (62 kB)", 62.0,
           unit="kB", steps=26)
     b.spin("Resolving dependencies (typer, pydantic, sqlite-vec)…",
            "12 dependencies satisfied")
-    b.reveal(L(S("Successfully installed eidetic-os-3.0.0", GREEN, bold=True)))
+    b.reveal(L(S("Successfully installed eidetic-os-4.0.0", GREEN, bold=True)))
     b.hold(700)
     b.blank()
 

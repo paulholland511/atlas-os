@@ -45,10 +45,10 @@ def build_install() -> Builder:
     b.cmd("pip install eidetic-os")
     b.reveal(L(S("Collecting eidetic-os", FG)))
     b.hold(280)
-    b.bar("Downloading eidetic_os-3.0.0-py3-none-any.whl (62 kB)", 62.0,
+    b.bar("Downloading eidetic_os-4.0.0-py3-none-any.whl (62 kB)", 62.0,
           unit="kB", steps=26)
-    b.spin("Installing collected packages…", "eidetic-os-3.0.0")
-    b.reveal(L(S("Successfully installed eidetic-os-3.0.0", GREEN, bold=True)))
+    b.spin("Installing collected packages…", "eidetic-os-4.0.0")
+    b.reveal(L(S("Successfully installed eidetic-os-4.0.0", GREEN, bold=True)))
     b.hold(1100)
 
     b.clear()
@@ -221,7 +221,7 @@ def build_extensions() -> Builder:
     b.cmd("pip install 'eidetic-os[trading]'")
     b.bar("Downloading trading extras (yfinance, TradingAgents)", 4.0,
           unit="MB", steps=24)
-    b.reveal(L(S("Successfully installed eidetic-os-3.0.0 ", GREEN, bold=True),
+    b.reveal(L(S("Successfully installed eidetic-os-4.0.0 ", GREEN, bold=True),
                S("+ trading", PINK, bold=True)))
     b.hold(1100)
 

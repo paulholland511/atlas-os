@@ -1367,9 +1367,10 @@ work — making memory *active* rather than a passive log:
   hybrid RAG search, the knowledge graph, and memory blocks as a first-class
   panel, no terminal required.
 - 🧙 **Interactive setup wizard 2.0** ([#25](https://github.com/paulholland511/atlas-os/issues/25)) —
-  a guided CLI interview that **auto-detects your models**, maps endpoints, and
-  **profiles your writing style**, taking `eidetic init` from "fill in the .env"
-  to a genuinely conversational onboarding.
+  a guided, Rich-powered CLI interview that **auto-detects your vault and models**,
+  maps endpoints, lets you pick an embedding model, and **captures a profile**,
+  taking `eidetic init` from "fill in the .env" to a genuinely conversational
+  onboarding. *Shipped — see [`eidetic_os/setup_wizard.py`](eidetic_os/setup_wizard.py).*
 - 💬 **Channel adapters** ([#26](https://github.com/paulholland511/atlas-os/issues/26)) —
   headless messaging over **Slack and Telegram** using a Letta-style channel
   schema, so you can talk to Eidetic (and receive its briefings) from your phone.

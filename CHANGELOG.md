@@ -92,6 +92,28 @@ issues [#22](https://github.com/paulholland511/atlas-os/issues/22)–[#27](https
     every endpoint's JSON shape, offline keyword search, fact listing/filtering/
     search, extraction (preview + store), stats (with and without an index), and
     the CORS headers.
+- **Interactive setup wizard** ([#25](https://github.com/paulholland511/atlas-os/issues/25)) —
+  a new [`eidetic_os/setup_wizard.py`](eidetic_os/setup_wizard.py) module that turns
+  `eidetic init` into a guided, **Rich-powered** interview (with a plain-text
+  fallback when Rich is unavailable). Highlights:
+  - An ASCII-art **Eidetic OS** banner, **vault auto-detection** (scans
+    `~/Documents/Obsidian`, `~/Obsidian`, `~/vault`, … and descends into a vault
+    container to find the real vault), and **local-LLM probing** across LM Studio
+    (`:1234`, `:5555`, and the documented LAN host), Ollama (`:11434`), and
+    llama.cpp (`:8080`).
+  - **Embedding-model selection** (auto when unambiguous, prompted when several
+    are offered), an optional **user profile** (name / role / communication
+    style), and a written **`.eidetic/config.yaml`** capturing the vault, detected
+    backend, profile, and the memory-scoring defaults.
+  - A small `WizardUI` abstraction with `RichUI` (panels, tables, rules) and
+    `PlainUI` implementations, plus fully **injectable IO** (`prompt`/`confirm`/
+    `select`) so the whole flow is scriptable and testable. The existing
+    `eidetic init` reuses the wizard's building blocks while preserving its
+    `--yes`/`--vault`/`--force` behaviour.
+  - Backed by a new shared [`eidetic_os/config.py`](eidetic_os/config.py) loader for
+    `.eidetic/config.yaml` (resolved env → `$VAULT_PATH` → cwd), and full coverage
+    in [`tests/test_setup_wizard.py`](tests/test_setup_wizard.py) — vault detection,
+    mocked-HTTP backend probing, config generation, and the scripted end-to-end run.
 
 ### Changed
 - **Rebranded from Atlas OS to Eidetic OS.** The project's first three major

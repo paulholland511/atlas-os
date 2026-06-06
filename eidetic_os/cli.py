@@ -1325,6 +1325,9 @@ def _git_init(vault: Path) -> None:
 
 def _print_welcome() -> None:
     """Friendly banner explaining what `eidetic init` is about to do."""
+    from eidetic_os import setup_wizard
+
+    setup_wizard.make_ui().banner(__version__)
     typer.secho("\n  ⛰  Eidetic OS — setup wizard\n", fg=typer.colors.CYAN, bold=True)
     typer.echo(
         "  Eidetic OS is your local-first personal AI operating system: a"
@@ -1353,8 +1356,12 @@ def _prompt_vault_path(vault: Path | None, yes: bool) -> Path:
     )
 
 
-def _detect_backend(values: dict[str, str]) -> None:
-    """Probe for a local LLM and fold any match's host/port/model into ``values``."""
+def _detect_backend(values: dict[str, str]) -> Endpoint | None:
+    """Probe for a local LLM and fold any match's host/port/model into ``values``.
+
+    Returns the chosen :class:`Endpoint` (the first that responded), or ``None``
+    if nothing was found — the wizard uses it for embedding-model selection.
+    """
     typer.echo("\n  Probing for a local LLM endpoint…")
     typer.secho(
         "    (LM Studio :5555 · Ollama :11434 · llama.cpp :8080)",
@@ -1363,13 +1370,14 @@ def _detect_backend(values: dict[str, str]) -> None:
     endpoints = detect_endpoints()
     if not endpoints:
         _echo_warn("no local LLM found — RAG/trading stay off until you set one up")
-        return
+        return None
     for ep in endpoints:
         models = ", ".join(ep.models[:3]) or "no models reported"
         _echo_ok(f"{ep.label} at {ep.base_url} ({models})")
     chosen = endpoints[0]
     values.update(_backend_env_from_endpoint(chosen))
     _echo_ok(f"using {chosen.base_url} for embeddings + chat")
+    return chosen
 
 
 def _prompt_email(values: dict[str, str], yes: bool) -> None:
@@ -1406,6 +1414,8 @@ def init(
     ``eidetic doctor`` to confirm it all works. ``--yes`` accepts every default for
     a fully non-interactive run.
     """
+    from eidetic_os import setup_wizard
+
     _print_welcome()
 
     # 1. Vault path
@@ -1413,12 +1423,25 @@ def init(
     values: dict[str, str] = {"VAULT_PATH": str(vault_path)}
 
     # 2. Detect a local LLM backend
-    _detect_backend(values)
+    endpoint = _detect_backend(values)
 
-    # 3. Email (optional, interactive only)
+    # 3. Embedding-model selection (interactive only; auto-picks otherwise)
+    wizard_ui = setup_wizard.make_ui()
+    embed_model: str | None = None
+    if endpoint is not None:
+        embed_model = setup_wizard.select_embedding_model(
+            wizard_ui, endpoint, interactive=not yes
+        )
+        if embed_model:
+            values["EMBED_MODEL"] = embed_model
+
+    # 4. Profile (optional, interactive only)
+    profile = setup_wizard.collect_profile(wizard_ui, interactive=not yes)
+
+    # 5. Email (optional, interactive only)
     _prompt_email(values, yes)
 
-    # 4. Write .env
+    # 6. Write .env
     env_dir = repo_root() or Path.cwd()
     env_path = env_dir / ".env"
     if env_path.exists() and not force:
@@ -1430,7 +1453,7 @@ def init(
     # any same-session command) sees it without re-reading the freshly written file.
     os.environ.update(values)
 
-    # 5. Scaffold the vault
+    # 7. Scaffold the vault
     typer.echo("\n  Scaffolding the vault…")
     _scaffold_vault(vault_path)
     try:
@@ -1440,7 +1463,22 @@ def init(
         _echo_warn(f"could not generate the skills catalog ({exc})")
     _git_init(vault_path)
 
-    # 6. CLAUDE.md (opt-in, interactive only)
+    # 8. Write .eidetic/config.yaml (detected backend + profile + memory defaults)
+    try:
+        document = setup_wizard.build_config(
+            vault_path=vault_path,
+            endpoint=endpoint,
+            embed_model=embed_model or values.get("EMBED_MODEL"),
+            profile=profile,
+        )
+        cfg_path = setup_wizard.write_config(
+            document, vault_path / ".eidetic" / "config.yaml"
+        )
+        _echo_ok(f"wrote {cfg_path.relative_to(vault_path)}")
+    except OSError as exc:
+        _echo_warn(f"could not write config.yaml ({exc})")
+
+    # 9. CLAUDE.md (opt-in, interactive only)
     home_claude = Path.home() / "CLAUDE.md"
     if not yes and not home_claude.exists() and typer.confirm(
         f"\n  Install the CLAUDE.md template to {home_claude}?", default=False
@@ -1448,13 +1486,13 @@ def init(
         shutil.copyfile(templates_dir() / "CLAUDE.md.template", home_claude)
         _echo_ok(f"wrote {home_claude} (edit the placeholders)")
 
-    # 7. Verify the setup with the doctor
+    # 10. Verify the setup with the doctor
     typer.secho("\n  Verifying your setup…", bold=True)
     results = _doctor_results()
     _render_doctor(results)
     fails = sum(1 for c in results if c.status == "FAIL")
 
-    # 8. You're ready
+    # 11. You're ready
     if fails:
         typer.secho(
             "\n  ⚠  Setup finished with issues — fix the FAILs above, "
